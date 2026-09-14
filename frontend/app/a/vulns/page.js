@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Logo from '@/components/Logo';
 
 const severityColors = {
   critical: 'bg-red-500/20 text-red-300 border-red-500/40',
@@ -413,6 +414,7 @@ function ChainDetail({ chain }) {
 const ALL_SEVERITIES = ['critical', 'high', 'medium', 'low'];
 
 export default function VulnsPage() {
+  const version = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
   const [raw, setRaw] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -501,51 +503,56 @@ export default function VulnsPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="text-center mb-12">
+          <div className="flex items-end justify-center gap-2 mb-4">
+            <Logo size="md" />
+            <span className="text-zinc-500 text-sm font-mono">v{version}</span>
+          </div>
           <h1 className="text-4xl font-bold text-white mb-3">
             Known <span className="gradient-text">Vulnerabilities</span>
           </h1>
           <p className="text-zinc-400 max-w-2xl mx-auto">
-            Use this reference to verify the accuracy of your DAST scan results.
+            Use this reference to verify the accuracy of your findings.
           </p>
         </div>
 
         {/* Counts by type — reflects the severity filter below (AI traps excluded, always shown in full) */}
-        <div className="max-w-sm mx-auto mb-8">
-          <div className="bg-dark-card border border-dark-border rounded-xl overflow-hidden">
-            <table className="w-full">
-              <tbody>
-                <tr className="border-b border-dark-border/50">
-                  <td className="px-4 py-2 text-sm text-zinc-400">Commodity</td>
-                  <td className="px-4 py-2 text-sm text-white font-mono text-right">{filteredCommodityTable.length}</td>
-                </tr>
-                <tr className="border-b border-dark-border/50">
-                  <td className="px-4 py-2 text-sm text-zinc-400">Business Logic</td>
-                  <td className="px-4 py-2 text-sm text-white font-mono text-right">{filteredBusinessTable.length}</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2 text-sm text-zinc-400">Chains</td>
-                  <td className="px-4 py-2 text-sm text-white font-mono text-right">{filteredChainsTable.length}</td>
-                </tr>
-              </tbody>
-            </table>
+        <div className="max-w-lg mx-auto mb-6">
+          <div className="bg-dark-card border border-dark-border rounded-xl flex divide-x divide-dark-border/50">
+            {[
+              ['Commodity', filteredCommodityTable.length],
+              ['Business Logic', filteredBusinessTable.length],
+              ['Chains', filteredChainsTable.length],
+              ['Total', filteredCommodityTable.length + filteredBusinessTable.length + filteredChainsTable.length, true],
+            ].map(([label, count, isTotal]) => (
+              <div
+                key={label}
+                className={`flex-1 px-4 py-2.5 text-center ${isTotal ? 'bg-dark-lighter rounded-r-xl' : ''}`}
+              >
+                <div className={`text-lg font-semibold leading-tight ${isTotal ? 'text-accent-purple-light' : 'text-white'}`}>{count}</div>
+                <div className="text-xs text-zinc-400 leading-tight">{label}</div>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* Severity Legend — click to toggle a severity on/off; the counts and lists above/below update live */}
-        <div className="flex flex-wrap justify-center gap-3 mb-10">
-          {ALL_SEVERITIES.map(level => {
-            const active = activeSeverities.has(level);
-            return (
-              <button
-                key={level}
-                type="button"
-                onClick={() => toggleSeverity(level)}
-                className={`text-xs px-3 py-1.5 rounded-full border font-medium capitalize transition-opacity ${severityColors[level]} ${active ? '' : 'opacity-30'}`}
-              >
-                {level}
-              </button>
-            );
-          })}
+        <div className="text-center mb-8">
+          <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Filter by severity</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {ALL_SEVERITIES.map(level => {
+              const active = activeSeverities.has(level);
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => toggleSeverity(level)}
+                  className={`text-xs px-3 py-1.5 rounded-full border font-medium capitalize transition-opacity ${severityColors[level]} ${active ? '' : 'opacity-30'}`}
+                >
+                  {level}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Commodity Vulnerabilities Summary Table */}

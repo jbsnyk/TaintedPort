@@ -5,6 +5,8 @@ import Button from '@/components/Button';
 import Logo from '@/components/Logo';
 
 export default function Home() {
+  const version = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
+
   return (
     <div className="min-h-screen bg-pattern">
       {/* Hero Section */}
@@ -14,8 +16,9 @@ export default function Home() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent-cyan/10 rounded-full blur-3xl" />
 
         <div className="relative z-10 max-w-5xl mx-auto px-4 text-center">
-          <div className="mb-8 flex justify-center">
+          <div className="mb-8 flex items-end justify-center gap-3">
             <Logo size="xl" />
+            <span className="text-zinc-500 text-lg font-mono">v{version}</span>
           </div>
 
           <div className="mb-6">
