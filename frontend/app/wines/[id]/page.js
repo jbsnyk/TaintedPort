@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { wineAPI, reviewAPI } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
+import { useWishlist } from '@/context/WishlistContext';
 import Button from '@/components/Button';
 import WineCard from '@/components/WineCard';
 import WineBottle from '@/components/WineBottle';
@@ -37,6 +38,8 @@ export default function WineDetailPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { addItem } = useCart();
+  const { isWishlisted, toggle } = useWishlist();
+  const [togglingWishlist, setTogglingWishlist] = useState(false);
   const [wine, setWine] = useState(null);
   const [relatedWines, setRelatedWines] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +101,19 @@ export default function WineDetailPage() {
       console.error('Failed to add to cart:', err);
     } finally {
       setTimeout(() => setAdding(false), 800);
+    }
+  };
+
+  const handleToggleWishlist = async () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    setTogglingWishlist(true);
+    try {
+      await toggle(wine.id);
+    } finally {
+      setTogglingWishlist(false);
     }
   };
 
@@ -228,7 +244,28 @@ export default function WineDetailPage() {
             <div className="bg-dark-card border border-dark-border rounded-xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-4xl font-bold text-white">€{wine.price.toFixed(2)}</span>
+                <button
+                  onClick={handleToggleWishlist}
+                  disabled={togglingWishlist}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dark-border hover:border-red-500/40 transition-colors"
+                >
+                  <svg
+                    className={`w-5 h-5 ${isWishlisted(wine.id) ? 'text-red-400' : 'text-zinc-400'}`}
+                    fill={isWishlisted(wine.id) ? 'currentColor' : 'none'}
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 21.364l-7.682-7.682a4.5 4.5 0 010-6.364z" />
+                  </svg>
+                  <span className="text-sm text-zinc-300">{isWishlisted(wine.id) ? 'Wishlisted' : 'Wishlist'}</span>
+                </button>
               </div>
+
+              {wine.stock_quantity <= 0 ? (
+                <p className="text-red-400 text-sm font-medium mb-4">Out of stock</p>
+              ) : wine.stock_quantity <= (wine.low_stock_threshold ?? 5) ? (
+                <p className="text-yellow-400 text-sm font-medium mb-4">Only {wine.stock_quantity} left in stock</p>
+              ) : null}
 
               <div className="flex items-center gap-4">
                 <div className="flex items-center border border-dark-border rounded-lg">
@@ -242,7 +279,7 @@ export default function WineDetailPage() {
                     {quantity}
                   </span>
                   <button
-                    onClick={() => setQuantity(Math.min(12, quantity + 1))}
+                    onClick={() => setQuantity(Math.min(12, wine.stock_quantity, quantity + 1))}
                     className="px-3 py-2 text-zinc-400 hover:text-white transition-colors"
                   >
                     +
@@ -252,10 +289,11 @@ export default function WineDetailPage() {
                 <Button
                   onClick={handleAddToCart}
                   loading={adding}
+                  disabled={wine.stock_quantity <= 0}
                   className="flex-1"
                   size="lg"
                 >
-                  {adding ? 'Added!' : 'Add to Cart'}
+                  {wine.stock_quantity <= 0 ? 'Out of Stock' : adding ? 'Added!' : 'Add to Cart'}
                 </Button>
               </div>
 

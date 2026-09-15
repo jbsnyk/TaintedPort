@@ -104,9 +104,18 @@ class AdminController {
             return ['success' => false, 'message' => 'Invalid status. Must be one of: ' . implode(', ', $validStatuses)];
         }
 
-        $stmt = $this->db->prepare('UPDATE orders SET status = :status WHERE id = :id');
+        $sql = 'UPDATE orders SET status = :status';
+        if (isset($data['tracking_number'])) $sql .= ', tracking_number = :tracking_number';
+        if (isset($data['carrier'])) $sql .= ', carrier = :carrier';
+        if ($data['status'] === 'shipped') $sql .= ", shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)";
+        if ($data['status'] === 'delivered') $sql .= ", delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)";
+        $sql .= ' WHERE id = :id';
+
+        $stmt = $this->db->prepare($sql);
         $stmt->bindValue(':status', $data['status'], SQLITE3_TEXT);
         $stmt->bindValue(':id', intval($orderId), SQLITE3_INTEGER);
+        if (isset($data['tracking_number'])) $stmt->bindValue(':tracking_number', $data['tracking_number'], SQLITE3_TEXT);
+        if (isset($data['carrier'])) $stmt->bindValue(':carrier', $data['carrier'], SQLITE3_TEXT);
         $stmt->execute();
 
         if ($this->db->changes() === 0) {
@@ -118,5 +127,102 @@ class AdminController {
             'success' => true,
             'message' => 'Order status updated to ' . $data['status'] . '.'
         ];
+    }
+
+    /**
+     * Dashboard summary: revenue, order mix, top sellers, stock and ticket health.
+     */
+    public function analytics($authUser) {
+        $this->requireAdmin($authUser);
+
+        $totals = $this->db->query(
+            "SELECT COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue
+             FROM orders WHERE status != 'cancelled'"
+        )->fetchArray(SQLITE3_ASSOC);
+
+        $byStatus = [];
+        $result = $this->db->query('SELECT status, COUNT(*) as count FROM orders GROUP BY status');
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $byStatus[$row['status']] = intval($row['count']);
+        }
+
+        $topWines = [];
+        $result = $this->db->query(
+            "SELECT wine_id, wine_name, SUM(quantity) as units_sold, SUM(subtotal) as revenue
+             FROM order_items GROUP BY wine_id ORDER BY units_sold DESC LIMIT 5"
+        );
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $row['units_sold'] = intval($row['units_sold']);
+            $row['revenue'] = floatval($row['revenue']);
+            $topWines[] = $row;
+        }
+
+        $byRegion = [];
+        $result = $this->db->query(
+            "SELECT w.region, SUM(oi.subtotal) as revenue
+             FROM order_items oi JOIN wines w ON oi.wine_id = w.id
+             GROUP BY w.region ORDER BY revenue DESC"
+        );
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $row['revenue'] = floatval($row['revenue']);
+            $byRegion[] = $row;
+        }
+
+        $lowStock = $this->db->query(
+            'SELECT id, name, stock_quantity, low_stock_threshold FROM wines
+             WHERE stock_quantity <= low_stock_threshold ORDER BY stock_quantity ASC'
+        );
+        $lowStockWines = [];
+        while ($row = $lowStock->fetchArray(SQLITE3_ASSOC)) {
+            $row['stock_quantity'] = intval($row['stock_quantity']);
+            $lowStockWines[] = $row;
+        }
+
+        $openTickets = $this->db->query(
+            "SELECT COUNT(*) as count FROM support_tickets WHERE status != 'closed'"
+        )->fetchArray(SQLITE3_ASSOC);
+
+        $userCount = $this->db->query('SELECT COUNT(*) as count FROM users')->fetchArray(SQLITE3_ASSOC);
+
+        return [
+            'success' => true,
+            'revenue' => floatval($totals['revenue']),
+            'order_count' => intval($totals['order_count']),
+            'orders_by_status' => $byStatus,
+            'top_wines' => $topWines,
+            'revenue_by_region' => $byRegion,
+            'low_stock_wines' => $lowStockWines,
+            'open_tickets' => intval($openTickets['count']),
+            'user_count' => intval($userCount['count']),
+        ];
+    }
+
+    /**
+     * List all users with their roles (Team management).
+     */
+    public function users($authUser) {
+        $this->requireAdmin($authUser);
+        $user = new User();
+        return ['success' => true, 'users' => $user->getAll()];
+    }
+
+    public function updateUserRole($authUser, $userId) {
+        $this->requireAdmin($authUser);
+
+        if (intval($userId) === intval($authUser['user_id'])) {
+            http_response_code(400);
+            return ['success' => false, 'message' => 'You cannot change your own role.'];
+        }
+
+        $data = json_decode(file_get_contents('php://input'), true);
+        $validRoles = ['user', 'support', 'admin'];
+        if (empty($data['role']) || !in_array($data['role'], $validRoles, true)) {
+            http_response_code(400);
+            return ['success' => false, 'message' => 'role must be one of: ' . implode(', ', $validRoles)];
+        }
+
+        $user = new User();
+        $user->updateRole($userId, $data['role']);
+        return ['success' => true, 'message' => 'Role updated.'];
     }
 }

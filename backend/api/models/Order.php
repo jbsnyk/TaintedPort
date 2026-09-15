@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/Wine.php';
 
 class Order {
     private $db;
@@ -15,6 +16,19 @@ class Order {
 
         if (empty($cartData['items'])) {
             return null;
+        }
+
+        // Verify stock before committing to the order - report the first
+        // item that can't be fulfilled rather than partially decrementing.
+        $wine = new Wine();
+        foreach ($cartData['items'] as $item) {
+            $wineRow = $wine->getById($item['wine_id']);
+            if (!$wineRow || $wineRow['stock_quantity'] < $item['quantity']) {
+                return [
+                    'error' => 'insufficient_stock',
+                    'message' => 'Not enough stock for ' . $item['wine_name'] . '.',
+                ];
+            }
         }
 
         $total = $cartData['total'];
@@ -54,6 +68,8 @@ class Order {
             $stmt->bindValue(':qty', $item['quantity'], SQLITE3_INTEGER);
             $stmt->bindValue(':subtotal', $item['subtotal'], SQLITE3_FLOAT);
             $stmt->execute();
+
+            $wine->adjustStock($item['wine_id'], -$item['quantity']);
         }
 
         // Clear cart

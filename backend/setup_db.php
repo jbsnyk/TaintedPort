@@ -20,6 +20,7 @@ CREATE TABLE users (
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     is_admin INTEGER DEFAULT 0,
+    role TEXT NOT NULL DEFAULT \'user\',
     totp_secret TEXT DEFAULT NULL,
     totp_enabled INTEGER DEFAULT 0,
     reset_token_issued_at INTEGER DEFAULT NULL,
@@ -42,6 +43,8 @@ CREATE TABLE wines (
     bottle_size TEXT DEFAULT \'750ml\',
     producer TEXT,
     food_pairing TEXT,
+    stock_quantity INTEGER NOT NULL DEFAULT 0,
+    low_stock_threshold INTEGER NOT NULL DEFAULT 5,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -50,6 +53,7 @@ CREATE TABLE cart_items (
     user_id INTEGER NOT NULL,
     wine_id INTEGER NOT NULL,
     quantity INTEGER NOT NULL DEFAULT 1,
+    custom_price REAL DEFAULT NULL,
     added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (wine_id) REFERENCES wines(id),
@@ -67,6 +71,10 @@ CREATE TABLE orders (
     shipping_postal_code TEXT NOT NULL,
     shipping_phone TEXT NOT NULL,
     delivery_notes TEXT,
+    tracking_number TEXT DEFAULT NULL,
+    carrier TEXT DEFAULT NULL,
+    shipped_at DATETIME DEFAULT NULL,
+    delivered_at DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -100,11 +108,59 @@ CREATE TABLE referral_codes (
     code TEXT UNIQUE NOT NULL,
     credit_amount REAL NOT NULL,
     max_uses INTEGER NOT NULL,
-    used_count INTEGER DEFAULT 0
+    used_count INTEGER DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE discount_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    type TEXT NOT NULL CHECK(type IN (\'percent\', \'fixed\')),
+    value REAL NOT NULL,
+    min_order_value REAL NOT NULL DEFAULT 0,
+    max_uses INTEGER DEFAULT NULL,
+    used_count INTEGER NOT NULL DEFAULT 0,
+    expires_at DATETIME DEFAULT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE wishlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    wine_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (wine_id) REFERENCES wines(id),
+    UNIQUE(user_id, wine_id)
+);
+
+CREATE TABLE support_tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT \'open\' CHECK(status IN (\'open\', \'in_progress\', \'closed\')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE support_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id INTEGER NOT NULL,
+    sender_role TEXT NOT NULL CHECK(sender_role IN (\'user\', \'admin\')),
+    sender_id INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ticket_id) REFERENCES support_tickets(id)
 );
 ');
 
 $db->exec("INSERT INTO referral_codes (code, credit_amount, max_uses) VALUES ('WELCOME10', 10.00, 1)");
+
+$db->exec("INSERT INTO discount_codes (code, type, value, min_order_value, max_uses) VALUES ('SAVE10', 'percent', 10.00, 0, 100)");
+$db->exec("INSERT INTO discount_codes (code, type, value, min_order_value, max_uses) VALUES ('PORT5', 'fixed', 5.00, 30.00, 100)");
 
 // Seed wine data
 $wines = [
@@ -325,6 +381,22 @@ foreach ($wines as $w) {
     $stmt->reset();
 }
 
+// Seed stock levels - most wines comfortably in stock, a couple deliberately
+// low (but not zero) so the low-stock UI has something to show on first load.
+$stockLevels = [
+    1 => 42, 2 => 18, 3 => 60, 4 => 4, 5 => 85, 6 => 24, 7 => 37, 8 => 15,
+    9 => 50, 10 => 29, 11 => 33, 12 => 20, 13 => 45, 14 => 12, 15 => 27,
+    16 => 19, 17 => 22, 18 => 3, 19 => 40, 20 => 58, 21 => 90, 22 => 31,
+    23 => 26, 24 => 48,
+];
+$stockStmt = $db->prepare('UPDATE wines SET stock_quantity = :qty WHERE id = :id');
+foreach ($stockLevels as $wineId => $qty) {
+    $stockStmt->bindValue(':qty', $qty, SQLITE3_INTEGER);
+    $stockStmt->bindValue(':id', $wineId, SQLITE3_INTEGER);
+    $stockStmt->execute();
+    $stockStmt->reset();
+}
+
 // Create demo users
 $demoHash = password_hash('password123', PASSWORD_BCRYPT);
 
@@ -343,12 +415,20 @@ $stmt->execute();
 $janeId = $db->lastInsertRowID();
 
 // Create admin user
-$stmt2 = $db->prepare('INSERT INTO users (name, email, password_hash, is_admin) VALUES (:name, :email, :hash, 1)');
+$stmt2 = $db->prepare("INSERT INTO users (name, email, password_hash, is_admin, role) VALUES (:name, :email, :hash, 1, 'admin')");
 $stmt2->bindValue(':name', 'Admin', SQLITE3_TEXT);
 $stmt2->bindValue(':email', 'admin@example.com', SQLITE3_TEXT);
 $stmt2->bindValue(':hash', $demoHash, SQLITE3_TEXT);
 $stmt2->execute();
 $adminId = $db->lastInsertRowID();
+
+// Create support user (limited admin role - orders and support tickets only)
+$stmt3 = $db->prepare("INSERT INTO users (name, email, password_hash, is_admin, role) VALUES (:name, :email, :hash, 0, 'support')");
+$stmt3->bindValue(':name', 'Sam Support', SQLITE3_TEXT);
+$stmt3->bindValue(':email', 'support@example.com', SQLITE3_TEXT);
+$stmt3->bindValue(':hash', $demoHash, SQLITE3_TEXT);
+$stmt3->execute();
+$supportId = $db->lastInsertRowID();
 
 // Seed orders for Joe (user 1)
 $db->exec("INSERT INTO orders (user_id, total, status, shipping_name, shipping_street, shipping_city, shipping_postal_code, shipping_phone, delivery_notes)
@@ -358,6 +438,7 @@ $joeOrder1 = $db->lastInsertRowID();
 $db->exec("INSERT INTO order_items (order_id, wine_id, wine_name, price, quantity, subtotal) VALUES
 ($joeOrder1, 1, 'Quinta do Vallado Douro Tinto', 185.00, 1, 185.00),
 ($joeOrder1, 8, 'Quinta do Crasto Reserva Old Vines', 280.00, 1, 280.00)");
+$db->exec("UPDATE orders SET tracking_number = 'CTT-PT-38217455', carrier = 'CTT Expresso', shipped_at = datetime('now', '-6 days'), delivered_at = datetime('now', '-3 days') WHERE id = $joeOrder1");
 
 $db->exec("INSERT INTO orders (user_id, total, status, shipping_name, shipping_street, shipping_city, shipping_postal_code, shipping_phone, delivery_notes)
 VALUES ($joeId, 178.00, 'pending', 'Joe Silva', 'Rua das Flores 42', 'Lisboa', '1200-195', '+351 912 345 678', '')");
@@ -375,6 +456,7 @@ $janeOrder1 = $db->lastInsertRowID();
 
 $db->exec("INSERT INTO order_items (order_id, wine_id, wine_name, price, quantity, subtotal) VALUES
 ($janeOrder1, 4, 'Barca Velha', 3500.00, 1, 3500.00)");
+$db->exec("UPDATE orders SET tracking_number = 'DPD-PT-90441278', carrier = 'DPD Portugal', shipped_at = datetime('now', '-1 day') WHERE id = $janeOrder1");
 
 $db->exec("INSERT INTO orders (user_id, total, status, shipping_name, shipping_street, shipping_city, shipping_postal_code, shipping_phone, delivery_notes)
 VALUES ($janeId, 625.00, 'delivered', 'Jane Doe', 'Avenida da Liberdade 110', 'Porto', '4000-322', '+351 934 567 890', '')");
@@ -382,6 +464,7 @@ $janeOrder2 = $db->lastInsertRowID();
 
 $db->exec("INSERT INTO order_items (order_id, wine_id, wine_name, price, quantity, subtotal) VALUES
 ($janeOrder2, 2, 'Pêra-Manca Branco', 890.00, 1, 890.00)");
+$db->exec("UPDATE orders SET tracking_number = 'CTT-PT-77102934', carrier = 'CTT Expresso', shipped_at = datetime('now', '-10 days'), delivered_at = datetime('now', '-7 days') WHERE id = $janeOrder2");
 
 $db->exec("INSERT INTO orders (user_id, total, status, shipping_name, shipping_street, shipping_city, shipping_postal_code, shipping_phone, delivery_notes)
 VALUES ($janeId, 504.00, 'pending', 'Jane Doe', 'Avenida da Liberdade 110', 'Porto', '4000-322', '+351 934 567 890', 'Call before delivery')");
@@ -426,6 +509,27 @@ foreach ($reviews as $r) {
     $reviewStmt->reset();
 }
 
+// Seed wishlists
+$db->exec("INSERT INTO wishlists (user_id, wine_id) VALUES
+($joeId, 4),
+($joeId, 11),
+($janeId, 8)");
+
+// Seed support tickets
+$db->exec("INSERT INTO support_tickets (user_id, subject, status) VALUES
+($joeId, 'Order arrived with a broken cork', 'open')");
+$ticket1 = $db->lastInsertRowID();
+$db->exec("INSERT INTO support_messages (ticket_id, sender_role, sender_id, message) VALUES
+($ticket1, 'user', $joeId, 'Hi, one of the bottles in order #$joeOrder1 arrived with a damaged cork and the wine had leaked. Could you help?')");
+
+$db->exec("INSERT INTO support_tickets (user_id, subject, status) VALUES
+($janeId, 'Question about delivery windows', 'closed')");
+$ticket2 = $db->lastInsertRowID();
+$db->exec("INSERT INTO support_messages (ticket_id, sender_role, sender_id, message) VALUES
+($ticket2, 'user', $janeId, 'Do you deliver on weekends in Porto?')");
+$db->exec("INSERT INTO support_messages (ticket_id, sender_role, sender_id, message) VALUES
+($ticket2, 'admin', $adminId, 'Yes, we deliver Saturdays 9am-6pm. Sundays are delivery-free.')");
+
 // Create exports directory with a sample CSV
 $exportsDir = __DIR__ . '/exports';
 if (!is_dir($exportsDir)) {
@@ -434,13 +538,15 @@ if (!is_dir($exportsDir)) {
 file_put_contents($exportsDir . '/wines-catalog.csv', "id,name,region,type,vintage,price\n1,Quinta do Vallado Douro Tinto,Douro,Red,2020,185.00\n2,Pêra-Manca Branco,Alentejo,White,2019,890.00\n3,Quinta da Aveleda Vinho Verde,Vinho Verde,White,2023,75.00\n");
 
 echo "Database setup complete!\n";
-echo "- Created 6 tables\n";
-echo "- Seeded " . count($wines) . " wines\n";
+echo "- Created 11 tables\n";
+echo "- Seeded " . count($wines) . " wines with stock levels\n";
 echo "- Created demo user: joe@example.com / password123 (id: $joeId)\n";
 echo "- Created demo user: jane@example.com / password123 (id: $janeId)\n";
 echo "- Created admin user: admin@example.com / password123 (id: $adminId)\n";
+echo "- Created support user: support@example.com / password123 (id: $supportId)\n";
 echo "- Created 2 orders for Joe, 3 orders for Jane\n";
 echo "- Seeded " . count($reviews) . " wine reviews\n";
+echo "- Seeded 2 discount codes, 3 wishlist entries, 2 support tickets\n";
 echo "- Created exports directory with sample CSV\n";
 
 $db->close();

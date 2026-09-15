@@ -1,6 +1,7 @@
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { CartProvider } from '@/context/CartContext';
+import { WishlistProvider } from '@/context/WishlistContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
@@ -15,11 +16,13 @@ export default function RootLayout({ children }) {
       <body className="antialiased min-h-screen bg-dark flex flex-col">
         <AuthProvider>
           <CartProvider>
-            <Navbar />
-            <main className="pt-16 flex-1">
-              {children}
-            </main>
-            <Footer />
+            <WishlistProvider>
+              <Navbar />
+              <main className="pt-16 flex-1">
+                {children}
+              </main>
+              <Footer />
+            </WishlistProvider>
           </CartProvider>
         </AuthProvider>
       </body>

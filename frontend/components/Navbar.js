@@ -6,10 +6,22 @@ import { useCart } from '@/context/CartContext';
 import { useState } from 'react';
 import Logo from '@/components/Logo';
 
+const ADMIN_LINKS = [
+  { href: '/admin', label: 'Overview', roles: ['admin'] },
+  { href: '/admin/orders', label: 'Orders', roles: ['admin', 'support'] },
+  { href: '/admin/wines', label: 'Wines', roles: ['admin'] },
+  { href: '/admin/discounts', label: 'Discounts & Referrals', roles: ['admin'] },
+  { href: '/admin/support', label: 'Support', roles: ['admin', 'support'] },
+  { href: '/admin/team', label: 'Team', roles: ['admin'] },
+];
+
 export default function Navbar() {
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const role = user?.role || (user?.is_admin ? 'admin' : 'user');
+  const adminLinks = ADMIN_LINKS.filter((l) => l.roles.includes(role));
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-dark/80 backdrop-blur-xl border-b border-dark-border">
@@ -45,13 +57,42 @@ export default function Navbar() {
                     </span>
                   )}
                 </Link>
+                <Link href="/wishlist" className="text-zinc-400 hover:text-white transition-colors">
+                  Wishlist
+                </Link>
+                <Link href="/support" className="text-zinc-400 hover:text-white transition-colors">
+                  Support
+                </Link>
                 <Link href="/account" className="text-zinc-400 hover:text-white transition-colors">
                   Account
                 </Link>
-                {user.is_admin && (
-                  <Link href="/admin" className="text-yellow-400 hover:text-yellow-300 transition-colors">
-                    Admin
-                  </Link>
+                {adminLinks.length > 0 && (
+                  <div className="relative" onMouseLeave={() => setAdminOpen(false)}>
+                    <button
+                      onClick={() => setAdminOpen(!adminOpen)}
+                      onMouseEnter={() => setAdminOpen(true)}
+                      className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 transition-colors"
+                    >
+                      Admin
+                      <svg className={`w-3.5 h-3.5 transition-transform ${adminOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {adminOpen && (
+                      <div className="absolute right-0 top-full mt-2 w-56 bg-dark-card border border-dark-border rounded-lg shadow-xl overflow-hidden py-1 z-50">
+                        {adminLinks.map((l) => (
+                          <Link
+                            key={l.href}
+                            href={l.href}
+                            onClick={() => setAdminOpen(false)}
+                            className="block px-4 py-2 text-sm text-zinc-300 hover:bg-dark-lighter hover:text-white transition-colors"
+                          >
+                            {l.label}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <button
                   onClick={logout}
@@ -110,14 +151,20 @@ export default function Navbar() {
                 <Link href="/cart" className="block px-3 py-2 text-zinc-400 hover:text-white" onClick={() => setMobileOpen(false)}>
                   Cart {itemCount > 0 && `(${itemCount})`}
                 </Link>
+                <Link href="/wishlist" className="block px-3 py-2 text-zinc-400 hover:text-white" onClick={() => setMobileOpen(false)}>
+                  Wishlist
+                </Link>
+                <Link href="/support" className="block px-3 py-2 text-zinc-400 hover:text-white" onClick={() => setMobileOpen(false)}>
+                  Support
+                </Link>
                 <Link href="/account" className="block px-3 py-2 text-zinc-400 hover:text-white" onClick={() => setMobileOpen(false)}>
                   Account
                 </Link>
-                {user.is_admin && (
-                  <Link href="/admin" className="block px-3 py-2 text-yellow-400 hover:text-yellow-300" onClick={() => setMobileOpen(false)}>
-                    Admin
+                {adminLinks.map((l) => (
+                  <Link key={l.href} href={l.href} className="block px-3 py-2 text-yellow-400 hover:text-yellow-300" onClick={() => setMobileOpen(false)}>
+                    {l.label}
                   </Link>
-                )}
+                ))}
                 <button onClick={() => { logout(); setMobileOpen(false); }} className="block px-3 py-2 text-zinc-400 hover:text-white">
                   Logout
                 </button>

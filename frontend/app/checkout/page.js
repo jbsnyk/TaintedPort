@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
-import { orderAPI } from '@/lib/api';
+import { orderAPI, discountAPI } from '@/lib/api';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 
@@ -24,6 +24,10 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(null);
+  const [discountCode, setDiscountCode] = useState('');
+  const [applyingDiscount, setApplyingDiscount] = useState(false);
+  const [discountError, setDiscountError] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -40,8 +44,30 @@ export default function CheckoutPage() {
   if (authLoading) return null;
   if (!user) return null;
 
-  const vat = total * 0.23;
-  const grandTotal = total + vat;
+  const discountedSubtotal = appliedDiscount ? Math.max(0, total - appliedDiscount.discount_amount) : total;
+  const vat = discountedSubtotal * 0.23;
+  const grandTotal = discountedSubtotal + vat;
+
+  const handleApplyDiscount = async () => {
+    if (!discountCode.trim()) return;
+    setApplyingDiscount(true);
+    setDiscountError('');
+    try {
+      const res = await discountAPI.validate(discountCode.trim(), total);
+      setAppliedDiscount(res.data);
+    } catch (err) {
+      setAppliedDiscount(null);
+      setDiscountError(err.response?.data?.message || 'Invalid discount code.');
+    } finally {
+      setApplyingDiscount(false);
+    }
+  };
+
+  const handleRemoveDiscount = () => {
+    setAppliedDiscount(null);
+    setDiscountCode('');
+    setDiscountError('');
+  };
 
   const validate = () => {
     const e = {};
@@ -60,7 +86,7 @@ export default function CheckoutPage() {
 
     setLoading(true);
     try {
-      const res = await orderAPI.create({
+      const payload = {
         shipping_address: {
           name: form.name,
           street: form.street,
@@ -69,7 +95,12 @@ export default function CheckoutPage() {
           phone: form.phone,
         },
         delivery_notes: form.delivery_notes,
-      });
+      };
+      if (appliedDiscount) {
+        payload.discount_code = appliedDiscount.code;
+        payload.discount_percent = appliedDiscount.discount_percent;
+      }
+      const res = await orderAPI.create(payload);
       setSuccess(res.data.order_id);
       clearCart();
     } catch (err) {
@@ -226,11 +257,52 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
+              {/* Discount code */}
+              <div className="mb-4">
+                {appliedDiscount ? (
+                  <div className="flex items-center justify-between p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <div>
+                      <p className="text-green-400 text-sm font-mono font-medium">{appliedDiscount.code}</p>
+                      <p className="text-green-400/70 text-xs">-€{appliedDiscount.discount_amount.toFixed(2)} applied</p>
+                    </div>
+                    <button onClick={handleRemoveDiscount} className="text-zinc-400 hover:text-white text-sm">
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Discount code"
+                        value={discountCode}
+                        onChange={(e) => { setDiscountCode(e.target.value.toUpperCase()); setDiscountError(''); }}
+                        className="flex-1 px-3 py-2 bg-dark-lighter border border-dark-border rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-accent-purple"
+                      />
+                      <button
+                        onClick={handleApplyDiscount}
+                        disabled={applyingDiscount || !discountCode.trim()}
+                        className="px-4 py-2 bg-dark-lighter border border-dark-border rounded-lg text-sm text-zinc-300 hover:text-white transition-colors disabled:opacity-50"
+                      >
+                        {applyingDiscount ? '...' : 'Apply'}
+                      </button>
+                    </div>
+                    {discountError && <p className="text-red-400 text-xs mt-1.5">{discountError}</p>}
+                  </div>
+                )}
+              </div>
+
               <div className="border-t border-dark-border pt-3 space-y-2">
                 <div className="flex justify-between text-zinc-400 text-sm">
                   <span>Subtotal</span>
                   <span>€{total.toFixed(2)}</span>
                 </div>
+                {appliedDiscount && (
+                  <div className="flex justify-between text-green-400 text-sm">
+                    <span>Discount</span>
+                    <span>-€{appliedDiscount.discount_amount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-zinc-400 text-sm">
                   <span>VAT (23%)</span>
                   <span>€{vat.toFixed(2)}</span>

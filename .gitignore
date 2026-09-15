@@ -31,6 +31,10 @@ yarn-error.log*
 .env*.local
 .env
 
+# runtime-uploaded wine images
+backend/uploads/wines/*
+!backend/uploads/wines/.gitkeep
+
 # vercel
 .vercel
 
@@ -41,9 +45,15 @@ next-env.d.ts
 # Snyk Security Extension - AI Rules (auto-generated)
 .cursor/rules/snyk_rules.mdc
 
-# Local AI-assistant config — not for distribution
+# Local AI-assistant config / working docs — not for distribution.
+# AppBuilder.md and tasks/ describe intentional vulnerabilities and must
+# never enter the public tree (see CLAUDE.md); SupplyChain.md is a local
+# working doc kept out for consistency.
 CLAUDE.md
 .claude/
+AppBuilder.md
+SupplyChain.md
+tasks/
 
 # Python
 __pycache__/

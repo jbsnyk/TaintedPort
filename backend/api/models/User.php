@@ -9,15 +9,16 @@ class User {
         $this->db = Database::getInstance();
     }
 
-    public function create($name, $email, $password, $isAdmin = 0) {
+    public function create($name, $email, $password, $isAdmin = 0, $role = 'user') {
         $hash = password_hash($password, PASSWORD_BCRYPT);
         $stmt = $this->db->prepare(
-            'INSERT INTO users (name, email, password_hash, is_admin) VALUES (:name, :email, :hash, :is_admin)'
+            'INSERT INTO users (name, email, password_hash, is_admin, role) VALUES (:name, :email, :hash, :is_admin, :role)'
         );
         $stmt->bindValue(':name', $name, SQLITE3_TEXT);
         $stmt->bindValue(':email', $email, SQLITE3_TEXT);
         $stmt->bindValue(':hash', $hash, SQLITE3_TEXT);
         $stmt->bindValue(':is_admin', intval($isAdmin), SQLITE3_INTEGER);
+        $stmt->bindValue(':role', $role, SQLITE3_TEXT);
         $stmt->execute();
 
         return $this->db->lastInsertRowID();
@@ -45,10 +46,29 @@ class User {
     }
 
     public function findById($id) {
-        $stmt = $this->db->prepare('SELECT id, name, email, is_admin, totp_enabled, account_credit, created_at FROM users WHERE id = :id');
+        $stmt = $this->db->prepare('SELECT id, name, email, is_admin, role, totp_enabled, account_credit, created_at FROM users WHERE id = :id');
         $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
         $result = $stmt->execute();
         return $result->fetchArray(SQLITE3_ASSOC);
+    }
+
+    public function getAll() {
+        $result = $this->db->query('SELECT id, name, email, is_admin, role, created_at FROM users ORDER BY created_at ASC');
+        $users = [];
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $row['is_admin'] = !empty($row['is_admin']) && $row['is_admin'] == 1;
+            $users[] = $row;
+        }
+        return $users;
+    }
+
+    public function updateRole($userId, $role) {
+        $stmt = $this->db->prepare('UPDATE users SET role = :role, is_admin = :is_admin WHERE id = :id');
+        $stmt->bindValue(':role', $role, SQLITE3_TEXT);
+        $stmt->bindValue(':is_admin', $role === 'admin' ? 1 : 0, SQLITE3_INTEGER);
+        $stmt->bindValue(':id', $userId, SQLITE3_INTEGER);
+        $stmt->execute();
+        return true;
     }
 
     public function updateName($userId, $name) {

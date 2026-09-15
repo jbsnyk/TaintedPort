@@ -11,10 +11,11 @@ class Cart {
 
     public function getItems($userId) {
         $stmt = $this->db->prepare(
-            'SELECT c.id, c.wine_id, w.name as wine_name, w.image_url as wine_image, 
-                    w.price, c.quantity, (w.price * c.quantity) as subtotal
-             FROM cart_items c 
-             JOIN wines w ON c.wine_id = w.id 
+            'SELECT c.id, c.wine_id, w.name as wine_name, w.image_url as wine_image,
+                    COALESCE(c.custom_price, w.price) as price, c.quantity,
+                    (COALESCE(c.custom_price, w.price) * c.quantity) as subtotal
+             FROM cart_items c
+             JOIN wines w ON c.wine_id = w.id
              WHERE c.user_id = :user_id'
         );
         $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
@@ -41,22 +42,26 @@ class Cart {
             return false;
         }
 
-        if ($customPrice !== null) {
-            $stmt = $this->db->prepare('UPDATE wines SET price = :price WHERE id = :id');
-            $stmt->bindValue(':price', $customPrice, SQLITE3_FLOAT);
-            $stmt->bindValue(':id', $wineId, SQLITE3_INTEGER);
-            $stmt->execute();
-        }
+        // Client-supplied price is still trusted (the vuln), but it is scoped
+        // to THIS user's cart line via cart_items.custom_price instead of
+        // mutating the shared wines catalogue that every other shopper sees.
+        $cpType = $customPrice !== null ? SQLITE3_FLOAT : SQLITE3_NULL;
 
-        // Upsert: insert or update quantity
+        // Upsert: insert or bump quantity; a provided custom_price overrides,
+        // a subsequent add without one keeps whatever was set.
         $stmt = $this->db->prepare(
-            'INSERT INTO cart_items (user_id, wine_id, quantity) VALUES (:user_id, :wine_id, :qty)
-             ON CONFLICT(user_id, wine_id) DO UPDATE SET quantity = quantity + :qty2'
+            'INSERT INTO cart_items (user_id, wine_id, quantity, custom_price)
+             VALUES (:user_id, :wine_id, :qty, :cp)
+             ON CONFLICT(user_id, wine_id) DO UPDATE SET
+                 quantity = quantity + :qty2,
+                 custom_price = COALESCE(:cp2, custom_price)'
         );
         $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
         $stmt->bindValue(':wine_id', $wineId, SQLITE3_INTEGER);
         $stmt->bindValue(':qty', $quantity, SQLITE3_INTEGER);
         $stmt->bindValue(':qty2', $quantity, SQLITE3_INTEGER);
+        $stmt->bindValue(':cp', $customPrice, $cpType);
+        $stmt->bindValue(':cp2', $customPrice, $cpType);
         $stmt->execute();
         return true;
     }

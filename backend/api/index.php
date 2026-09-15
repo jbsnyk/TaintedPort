@@ -29,6 +29,9 @@ require_once __DIR__ . '/controllers/PasswordResetController.php';
 require_once __DIR__ . '/controllers/PartnerController.php';
 require_once __DIR__ . '/controllers/ReferralController.php';
 require_once __DIR__ . '/controllers/ContactController.php';
+require_once __DIR__ . '/controllers/DiscountController.php';
+require_once __DIR__ . '/controllers/WishlistController.php';
+require_once __DIR__ . '/controllers/SupportController.php';
 
 // Parse the request URI
 $requestUri = $_SERVER['REQUEST_URI'];
@@ -107,6 +110,49 @@ try {
         $ctrl = new ReferralController();
         $response = $ctrl->redeem($authUser);
     }
+    // Wishlist routes (protected)
+    elseif ($path === '/wishlist' && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new WishlistController();
+        $response = $ctrl->index($authUser);
+    }
+    elseif ($path === '/wishlist' && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new WishlistController();
+        $response = $ctrl->add($authUser);
+    }
+    elseif (preg_match('#^/wishlist/(\d+)$#', $path, $matches) && $method === 'DELETE') {
+        $authUser = authenticateToken();
+        $ctrl = new WishlistController();
+        $response = $ctrl->remove($authUser, $matches[1]);
+    }
+    // Discount code routes
+    elseif ($path === '/discounts/validate' && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new DiscountController();
+        $response = $ctrl->validate($authUser);
+    }
+    // Support ticket routes (customer-facing, protected)
+    elseif ($path === '/support/tickets' && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new SupportController();
+        $response = $ctrl->index($authUser);
+    }
+    elseif ($path === '/support/tickets' && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new SupportController();
+        $response = $ctrl->create($authUser);
+    }
+    elseif (preg_match('#^/support/tickets/(\d+)$#', $path, $matches) && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new SupportController();
+        $response = $ctrl->show($authUser, $matches[1]);
+    }
+    elseif (preg_match('#^/support/tickets/(\d+)/reply$#', $path, $matches) && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new SupportController();
+        $response = $ctrl->reply($authUser, $matches[1]);
+    }
     // 2FA routes
     elseif ($path === '/auth/2fa/setup' && $method === 'POST') {
         $authUser = authenticateToken();
@@ -144,6 +190,31 @@ try {
         $authUser = authenticateToken();
         $ctrl = new WineController();
         $response = $ctrl->importFromUrl($authUser);
+    }
+    elseif ($path === '/wines' && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new WineController();
+        $response = $ctrl->create($authUser);
+    }
+    elseif (preg_match('#^/wines/(\d+)/image$#', $path, $matches) && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new WineController();
+        $response = $ctrl->uploadImage($authUser, $matches[1]);
+    }
+    elseif (preg_match('#^/wines/(\d+)/stock$#', $path, $matches) && $method === 'PUT') {
+        $authUser = authenticateToken();
+        $ctrl = new WineController();
+        $response = $ctrl->adjustStock($authUser, $matches[1]);
+    }
+    elseif (preg_match('#^/wines/(\d+)$#', $path, $matches) && $method === 'PUT') {
+        $authUser = authenticateToken();
+        $ctrl = new WineController();
+        $response = $ctrl->update($authUser, $matches[1]);
+    }
+    elseif (preg_match('#^/wines/(\d+)$#', $path, $matches) && $method === 'DELETE') {
+        $authUser = authenticateToken();
+        $ctrl = new WineController();
+        $response = $ctrl->delete($authUser, $matches[1]);
     }
     elseif (preg_match('#^/wines/export/(.+)$#', $path, $matches) && $method === 'GET') {
         $ctrl = new WineController();
@@ -229,6 +300,79 @@ try {
         $authUser = authenticateToken();
         $ctrl = new AdminController();
         $response = $ctrl->updateOrderStatus($authUser, $matches[1]);
+    }
+    elseif ($path === '/admin/analytics' && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new AdminController();
+        $response = $ctrl->analytics($authUser);
+    }
+    elseif ($path === '/admin/users' && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new AdminController();
+        $response = $ctrl->users($authUser);
+    }
+    elseif (preg_match('#^/admin/users/(\d+)/role$#', $path, $matches) && $method === 'PUT') {
+        $authUser = authenticateToken();
+        $ctrl = new AdminController();
+        $response = $ctrl->updateUserRole($authUser, $matches[1]);
+    }
+    // Admin: discount codes
+    elseif ($path === '/admin/discounts' && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new DiscountController();
+        $response = $ctrl->index($authUser);
+    }
+    elseif ($path === '/admin/discounts' && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new DiscountController();
+        $response = $ctrl->create($authUser);
+    }
+    elseif (preg_match('#^/admin/discounts/(\d+)$#', $path, $matches) && $method === 'PUT') {
+        $authUser = authenticateToken();
+        $ctrl = new DiscountController();
+        $response = $ctrl->update($authUser, $matches[1]);
+    }
+    elseif (preg_match('#^/admin/discounts/(\d+)$#', $path, $matches) && $method === 'DELETE') {
+        $authUser = authenticateToken();
+        $ctrl = new DiscountController();
+        $response = $ctrl->delete($authUser, $matches[1]);
+    }
+    // Admin: referral codes
+    elseif ($path === '/admin/referrals' && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new ReferralController();
+        $response = $ctrl->index($authUser);
+    }
+    elseif ($path === '/admin/referrals' && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new ReferralController();
+        $response = $ctrl->create($authUser);
+    }
+    elseif (preg_match('#^/admin/referrals/(\d+)$#', $path, $matches) && $method === 'DELETE') {
+        $authUser = authenticateToken();
+        $ctrl = new ReferralController();
+        $response = $ctrl->delete($authUser, $matches[1]);
+    }
+    // Admin/support: tickets
+    elseif ($path === '/admin/support/tickets' && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new SupportController();
+        $response = $ctrl->adminIndex($authUser);
+    }
+    elseif (preg_match('#^/admin/support/tickets/(\d+)$#', $path, $matches) && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new SupportController();
+        $response = $ctrl->adminShow($authUser, $matches[1]);
+    }
+    elseif (preg_match('#^/admin/support/tickets/(\d+)/reply$#', $path, $matches) && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new SupportController();
+        $response = $ctrl->adminReply($authUser, $matches[1]);
+    }
+    elseif (preg_match('#^/admin/support/tickets/(\d+)/status$#', $path, $matches) && $method === 'PUT') {
+        $authUser = authenticateToken();
+        $ctrl = new SupportController();
+        $response = $ctrl->updateStatus($authUser, $matches[1]);
     }
     elseif ($path === '/pi-log-data' && $method === 'GET') {
         $ctrl = new PiCallbackController();

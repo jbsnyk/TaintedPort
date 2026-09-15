@@ -47,8 +47,9 @@ See `DeployInstructions.txt` for the full publish + deploy flow.
 | Joe Silva | joe@example.com | password123 | User |
 | Jane Doe | jane@example.com | password123 | User |
 | Admin | admin@example.com | password123 | Admin |
+| Sam Support | support@example.com | password123 | Support |
 
-Joe and Jane have pre-seeded orders. The admin account has access to `/admin` for order management.
+Joe and Jane have pre-seeded orders, wishlist items and support tickets. The admin account has full access to `/admin` (overview, orders, wines & stock, discount/referral codes, support inbox, team & roles). The support account can only access order management and the support inbox.
 
 ## Local Development (without Docker)
 

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
+import { useWishlist } from '@/context/WishlistContext';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import WineBottle from './WineBottle';
@@ -21,8 +22,13 @@ const regionColors = {
 export default function WineCard({ wine }) {
   const { user } = useAuth();
   const { addItem } = useCart();
+  const { isWishlisted, toggle } = useWishlist();
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [togglingWishlist, setTogglingWishlist] = useState(false);
+
+  const outOfStock = wine.stock_quantity <= 0;
+  const lowStock = !outOfStock && wine.stock_quantity <= (wine.low_stock_threshold ?? 5);
 
   const handleAddToCart = async (e) => {
     e.preventDefault();
@@ -41,6 +47,21 @@ export default function WineCard({ wine }) {
     }
   };
 
+  const handleToggleWishlist = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    setTogglingWishlist(true);
+    try {
+      await toggle(wine.id);
+    } finally {
+      setTogglingWishlist(false);
+    }
+  };
+
   return (
     <Link href={`/wines/${wine.id}`}>
       <div className="bg-dark-card border border-dark-border rounded-xl overflow-hidden transition-all duration-300 wine-card-hover cursor-pointer group h-full flex flex-col">
@@ -49,10 +70,33 @@ export default function WineCard({ wine }) {
           <div className="group-hover:scale-105 transition-transform duration-500 drop-shadow-lg">
             <WineBottle type={wine.type} name={wine.name} size="sm" />
           </div>
-          <div className="absolute top-3 right-3">
+          <div className="absolute top-3 left-3">
+            <button
+              onClick={handleToggleWishlist}
+              disabled={togglingWishlist}
+              className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:bg-black/60 transition-colors"
+              title={isWishlisted(wine.id) ? 'Remove from wishlist' : 'Add to wishlist'}
+            >
+              <svg
+                className={`w-4 h-4 ${isWishlisted(wine.id) ? 'text-red-400' : 'text-white'}`}
+                fill={isWishlisted(wine.id) ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 21.364l-7.682-7.682a4.5 4.5 0 010-6.364z" />
+              </svg>
+            </button>
+          </div>
+          <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
             <span className={`text-xs px-2 py-1 rounded-full ${regionColors[wine.region] || 'bg-zinc-500/20 text-zinc-300'}`}>
               {wine.region}
             </span>
+            {outOfStock && (
+              <span className="text-xs px-2 py-1 rounded-full bg-red-500/20 text-red-300">Out of Stock</span>
+            )}
+            {lowStock && (
+              <span className="text-xs px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-300">Only {wine.stock_quantity} left</span>
+            )}
           </div>
         </div>
 
@@ -107,10 +151,10 @@ export default function WineCard({ wine }) {
             </span>
             <button
               onClick={handleAddToCart}
-              disabled={adding}
+              disabled={adding || outOfStock}
               className="px-4 py-2 bg-gradient-to-r from-accent-purple to-accent-cyan text-white rounded-lg text-sm font-medium hover:opacity-90 transition-all disabled:opacity-50"
             >
-              {adding ? '✓ Added' : 'Add to Cart'}
+              {outOfStock ? 'Out of Stock' : adding ? '✓ Added' : 'Add to Cart'}
             </button>
           </div>
         </div>

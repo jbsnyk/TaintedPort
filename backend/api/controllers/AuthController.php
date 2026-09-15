@@ -36,8 +36,9 @@ class AuthController {
         }
 
         $isAdmin = isset($data['is_admin']) ? $data['is_admin'] : 0;
-        $userId = $this->user->create($data['name'], $data['email'], $data['password'], $isAdmin);
-        $token = JWT::encode(['user_id' => $userId, 'email' => $data['email'], 'is_admin' => (bool)$isAdmin]);
+        $role = $isAdmin ? 'admin' : 'user';
+        $userId = $this->user->create($data['name'], $data['email'], $data['password'], $isAdmin, $role);
+        $token = JWT::encode(['user_id' => $userId, 'email' => $data['email'], 'is_admin' => (bool)$isAdmin, 'role' => $role]);
 
         http_response_code(201);
         return [
@@ -48,7 +49,8 @@ class AuthController {
                 'id' => $userId,
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'is_admin' => (bool)$isAdmin
+                'is_admin' => (bool)$isAdmin,
+                'role' => $role
             ]
         ];
     }
@@ -92,7 +94,8 @@ class AuthController {
         }
 
         $isAdmin = !empty($user['is_admin']) && $user['is_admin'] == 1;
-        $token = JWT::encode(['user_id' => $user['id'], 'email' => $user['email'], 'is_admin' => $isAdmin]);
+        $role = isset($user['role']) ? $user['role'] : ($isAdmin ? 'admin' : 'user');
+        $token = JWT::encode(['user_id' => $user['id'], 'email' => $user['email'], 'is_admin' => $isAdmin, 'role' => $role]);
 
         $response = [
             'success' => true,
@@ -101,7 +104,8 @@ class AuthController {
                 'id' => $user['id'],
                 'name' => $user['name'],
                 'email' => $user['email'],
-                'is_admin' => $isAdmin
+                'is_admin' => $isAdmin,
+                'role' => $role
             ]
         ];
 

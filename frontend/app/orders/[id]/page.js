@@ -67,7 +67,11 @@ export default function OrderDetailPage() {
     processing: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
     shipped: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
     delivered: 'text-green-400 border-green-500/30 bg-green-500/10',
+    cancelled: 'text-red-400 border-red-500/30 bg-red-500/10',
   };
+
+  const steps = ['pending', 'processing', 'shipped', 'delivered'];
+  const currentStep = steps.indexOf(order.status);
 
   return (
     <div className="min-h-screen bg-pattern">
@@ -84,6 +88,48 @@ export default function OrderDetailPage() {
             {order.status}
           </span>
         </div>
+
+        {/* Shipment Tracking */}
+        {order.status !== 'cancelled' && (
+          <div className="bg-dark-card border border-dark-border rounded-xl p-6 mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-white">Shipment Tracking</h2>
+              {order.tracking_number && (
+                <p className="text-zinc-400 text-sm">
+                  {order.carrier && <span>{order.carrier} · </span>}
+                  <span className="font-mono">{order.tracking_number}</span>
+                </p>
+              )}
+            </div>
+            <div className="flex items-center">
+              {steps.map((step, i) => (
+                <div key={step} className="flex items-center flex-1 last:flex-none">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center border-2 text-xs font-medium ${
+                        i <= currentStep
+                          ? 'bg-accent-purple border-accent-purple text-white'
+                          : 'border-dark-border text-zinc-600'
+                      }`}
+                    >
+                      {i < currentStep || (i === currentStep && step === 'delivered') ? '✓' : i + 1}
+                    </div>
+                    <p className={`text-xs mt-2 capitalize ${i <= currentStep ? 'text-white' : 'text-zinc-600'}`}>{step}</p>
+                    {step === 'shipped' && order.shipped_at && (
+                      <p className="text-zinc-600 text-[10px] mt-0.5">{new Date(order.shipped_at).toLocaleDateString()}</p>
+                    )}
+                    {step === 'delivered' && order.delivered_at && (
+                      <p className="text-zinc-600 text-[10px] mt-0.5">{new Date(order.delivered_at).toLocaleDateString()}</p>
+                    )}
+                  </div>
+                  {i < steps.length - 1 && (
+                    <div className={`flex-1 h-0.5 mx-2 ${i < currentStep ? 'bg-accent-purple' : 'bg-dark-border'}`} />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           {/* Shipping Info */}

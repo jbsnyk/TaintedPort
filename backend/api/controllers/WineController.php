@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../models/Wine.php';
 require_once __DIR__ . '/../models/Review.php';
+require_once __DIR__ . '/../middleware/authorize.php';
 
 class WineController {
     private $wine;
@@ -105,6 +106,114 @@ class WineController {
             'imported' => $wineData,
             'url' => $data['url']
         ];
+    }
+
+    public function create($authUser) {
+        requireRole($authUser, ['admin']);
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        $required = ['name', 'region', 'type', 'vintage', 'price'];
+        foreach ($required as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                http_response_code(400);
+                return ['success' => false, 'message' => "$field is required."];
+            }
+        }
+
+        $id = $this->wine->create($data);
+        http_response_code(201);
+        return ['success' => true, 'message' => 'Wine created.', 'id' => $id];
+    }
+
+    public function update($authUser, $id) {
+        requireRole($authUser, ['admin']);
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        if (!$this->wine->getByIdDirect($id)) {
+            http_response_code(404);
+            return ['success' => false, 'message' => 'Wine not found.'];
+        }
+
+        $required = ['name', 'region', 'type', 'vintage', 'price'];
+        foreach ($required as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                http_response_code(400);
+                return ['success' => false, 'message' => "$field is required."];
+            }
+        }
+
+        $this->wine->update($id, $data);
+        return ['success' => true, 'message' => 'Wine updated.'];
+    }
+
+    public function delete($authUser, $id) {
+        requireRole($authUser, ['admin']);
+
+        if (!$this->wine->getByIdDirect($id)) {
+            http_response_code(404);
+            return ['success' => false, 'message' => 'Wine not found.'];
+        }
+
+        $this->wine->delete($id);
+        return ['success' => true, 'message' => 'Wine deleted.'];
+    }
+
+    public function adjustStock($authUser, $id) {
+        requireRole($authUser, ['admin']);
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        if (!isset($data['delta'])) {
+            http_response_code(400);
+            return ['success' => false, 'message' => 'delta is required.'];
+        }
+
+        if (!$this->wine->getByIdDirect($id)) {
+            http_response_code(404);
+            return ['success' => false, 'message' => 'Wine not found.'];
+        }
+
+        $this->wine->adjustStock($id, intval($data['delta']));
+        $wine = $this->wine->getByIdDirect($id);
+        return ['success' => true, 'message' => 'Stock updated.', 'stock_quantity' => intval($wine['stock_quantity'])];
+    }
+
+    public function uploadImage($authUser, $id) {
+        requireRole($authUser, ['admin']);
+
+        if (!$this->wine->getByIdDirect($id)) {
+            http_response_code(404);
+            return ['success' => false, 'message' => 'Wine not found.'];
+        }
+
+        if (empty($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+            http_response_code(400);
+            return ['success' => false, 'message' => 'An image file is required.'];
+        }
+
+        $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        $mime = mime_content_type($_FILES['image']['tmp_name']);
+        if (!isset($allowed[$mime])) {
+            http_response_code(400);
+            return ['success' => false, 'message' => 'Only JPEG, PNG or WebP images are allowed.'];
+        }
+
+        if ($_FILES['image']['size'] > 5 * 1024 * 1024) {
+            http_response_code(400);
+            return ['success' => false, 'message' => 'Image must be 5MB or smaller.'];
+        }
+
+        $uploadsDir = realpath(__DIR__ . '/../../') . '/uploads/wines';
+        if (!is_dir($uploadsDir)) {
+            mkdir($uploadsDir, 0755, true);
+        }
+
+        $filename = intval($id) . '-' . time() . '.' . $allowed[$mime];
+        move_uploaded_file($_FILES['image']['tmp_name'], $uploadsDir . '/' . $filename);
+
+        $imageUrl = '/uploads/wines/' . $filename;
+        $this->wine->setImageUrl($id, $imageUrl);
+
+        return ['success' => true, 'message' => 'Image uploaded.', 'image_url' => $imageUrl];
     }
 
     public function export($filename) {

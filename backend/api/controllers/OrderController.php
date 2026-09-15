@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../models/Order.php';
 require_once __DIR__ . '/../models/Cart.php';
+require_once __DIR__ . '/../models/DiscountCode.php';
 
 class OrderController {
     private $order;
@@ -41,6 +42,22 @@ class OrderController {
         if ($orderId === null) {
             http_response_code(400);
             return ['success' => false, 'message' => 'Cart is empty.'];
+        }
+
+        if (is_array($orderId) && isset($orderId['error'])) {
+            http_response_code(409);
+            return ['success' => false, 'message' => $orderId['message']];
+        }
+
+        // Bookkeeping only: if the code used matches a real managed discount
+        // code, count the redemption. Doesn't gate anything above - the
+        // discount amount itself was already decided by $discountPercent.
+        if (!empty($data['discount_code'])) {
+            $discountModel = new DiscountCode();
+            $realCode = $discountModel->findByCode(strtoupper(trim($data['discount_code'])));
+            if ($realCode) {
+                $discountModel->incrementUsedCount($realCode['id']);
+            }
         }
 
         http_response_code(201);
