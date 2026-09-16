@@ -19,6 +19,17 @@ chown -R www-data:www-data /var/www/backend/database.db /var/www/backend/data
 
 echo "[init] Database ready."
 
+# Load runtime secrets (moved out of the web root at build time) into the
+# environment. php-fpm hands STRIPE_* to workers via env[] (see the pool
+# config); open_basedir keeps the intentional LFI/SSRF (#27) jailed to
+# /var/www, so this file and /proc/self/environ are both out of its reach.
+if [ -f /etc/taintedport.env ]; then
+    set -a
+    . /etc/taintedport.env
+    set +a
+    echo "[init] Loaded secrets from /etc/taintedport.env into the environment."
+fi
+
 # Seed the htpasswd file used by nginx to gate /a/*.
 # Set ADMIN_USER / ADMIN_PASS at runtime to override; the defaults are
 # only suitable for local development.
