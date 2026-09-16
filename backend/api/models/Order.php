@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/Wine.php';
+require_once __DIR__ . '/User.php';
 
 class Order {
     private $db;
@@ -36,6 +37,15 @@ class Order {
         if ($discountPercent > 0) {
             $total = $total * (1 - ($discountPercent / 100));
             if ($total < 0) $total = 0;
+        }
+
+        // Apply the buyer's store credit toward the order total.
+        $userModel = new User();
+        $credit = $userModel->getCredit($userId);
+        if ($credit > 0 && $total > 0) {
+            $applied = min($credit, $total);
+            $total = round($total - $applied, 2);
+            $userModel->addCredit($userId, -$applied);
         }
 
         $stmt = $this->db->prepare(

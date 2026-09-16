@@ -32,6 +32,7 @@ require_once __DIR__ . '/controllers/ContactController.php';
 require_once __DIR__ . '/controllers/DiscountController.php';
 require_once __DIR__ . '/controllers/WishlistController.php';
 require_once __DIR__ . '/controllers/SupportController.php';
+require_once __DIR__ . '/controllers/GiftCardController.php';
 
 // Parse the request URI
 $requestUri = $_SERVER['REQUEST_URI'];
@@ -132,6 +133,17 @@ try {
         $authUser = authenticateToken();
         $ctrl = new WishlistController();
         $response = $ctrl->remove($authUser, $matches[1]);
+    }
+    // Gift card routes (protected)
+    elseif ($path === '/giftcards/welcome' && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new GiftCardController();
+        $response = $ctrl->welcome($authUser);
+    }
+    elseif ($path === '/giftcards/redeem' && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new GiftCardController();
+        $response = $ctrl->redeem($authUser);
     }
     // Discount code routes
     elseif ($path === '/discounts/validate' && $method === 'POST') {
@@ -281,6 +293,15 @@ try {
         $authUser = authenticateToken();
         $ctrl = new OrderController();
         $response = $ctrl->index($authUser);
+    }
+    elseif ($path === '/orders/track' && $method === 'GET') {
+        $ctrl = new OrderController();
+        $response = $ctrl->track();
+    }
+    elseif (preg_match('#^/orders/(\d+)/tracking-link$#', $path, $matches) && $method === 'GET') {
+        $authUser = authenticateToken();
+        $ctrl = new OrderController();
+        $response = $ctrl->trackingLink($authUser, $matches[1]);
     }
     elseif (preg_match('#^/orders/(\d+)$#', $path, $matches) && $method === 'GET') {
         $authUser = authenticateToken();

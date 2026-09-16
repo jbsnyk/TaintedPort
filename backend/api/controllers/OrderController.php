@@ -3,12 +3,67 @@
 require_once __DIR__ . '/../models/Order.php';
 require_once __DIR__ . '/../models/Cart.php';
 require_once __DIR__ . '/../models/DiscountCode.php';
+require_once __DIR__ . '/../config/tracking.php';
 
 class OrderController {
     private $order;
 
     public function __construct() {
         $this->order = new Order();
+    }
+
+    /**
+     * Issue a shareable "track your order" link for one of the caller's own
+     * orders. The token payload is base64url-encoded and signed.
+     */
+    public function trackingLink($authUser, $orderId) {
+        $order = $this->order->getById(intval($orderId), $authUser['user_id']);
+        if (!$order || $order['user_id'] != $authUser['user_id']) {
+            http_response_code(404);
+            return ['success' => false, 'message' => 'Order not found.'];
+        }
+
+        $data = 'order_id=' . intval($orderId) . '&iat=' . time();
+        $sig = TrackingLink::sign($data);
+        $d = rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+
+        return [
+            'success' => true,
+            'tracking_url' => '/orders/track?d=' . $d . '&sig=' . $sig,
+        ];
+    }
+
+    /**
+     * Public order tracking via a signed link (no login). Verifies the
+     * signature over the raw token bytes, then serves the order.
+     */
+    public function track() {
+        $d = isset($_GET['d']) ? $_GET['d'] : '';
+        $sig = isset($_GET['sig']) ? $_GET['sig'] : '';
+
+        $data = base64_decode(strtr($d, '-_', '+/'));
+        if ($data === false || !TrackingLink::verify($data, $sig)) {
+            http_response_code(403);
+            return ['success' => false, 'message' => 'Invalid or expired tracking link.'];
+        }
+
+        // Pull the fields out of the signed token. Split by hand so the
+        // "amount"-style bracket rewriting parse_str() does can't bite us.
+        $params = [];
+        foreach (explode('&', $data) as $pair) {
+            if ($pair === '') continue;
+            $kv = explode('=', $pair, 2);
+            $params[urldecode($kv[0])] = isset($kv[1]) ? urldecode($kv[1]) : '';
+        }
+        $orderId = isset($params['order_id']) ? intval($params['order_id']) : 0;
+
+        $order = $this->order->getById($orderId, 0);
+        if (!$order) {
+            http_response_code(404);
+            return ['success' => false, 'message' => 'Order not found.'];
+        }
+
+        return ['success' => true, 'order' => $order];
     }
 
     public function create($authUser) {
