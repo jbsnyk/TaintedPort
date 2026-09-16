@@ -71,6 +71,14 @@ export default function AdminTicketDetailPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">{ticket.subject}</h1>
           <p className="text-zinc-500 text-sm mt-1">{ticket.user_name} · {ticket.user_email}</p>
+          <a
+            href={`/api/support/tickets/${params.id}/render`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-purple text-xs hover:text-accent-purple-light transition-colors"
+          >
+            Printable view ↗
+          </a>
         </div>
         <select
           value={ticket.status}

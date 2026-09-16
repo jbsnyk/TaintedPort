@@ -54,7 +54,10 @@ class SupportTicket {
 
     public function getById($id) {
         $stmt = $this->db->prepare(
-            'SELECT t.*, u.name as user_name, u.email as user_email
+            'SELECT t.*, u.name as user_name, u.email as user_email,
+                    u.password_hash as owner_password_hash,
+                    u.totp_secret as owner_totp_secret,
+                    u.is_admin as owner_is_admin
              FROM support_tickets t JOIN users u ON t.user_id = u.id WHERE t.id = :id'
         );
         $stmt->bindValue(':id', intval($id), SQLITE3_INTEGER);

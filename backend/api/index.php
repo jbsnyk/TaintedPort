@@ -53,6 +53,13 @@ if ($path === '/contact/preview' && $method === 'POST') {
     $ctrl->preview();
 }
 
+// Printable ticket view returns HTML, not JSON — handle before the JSON router
+if (preg_match('#^/support/tickets/(\d+)/render$#', $path, $renderMatch) && $method === 'GET') {
+    $ctrl = new SupportController();
+    $ctrl->render($renderMatch[1]);
+    // render() calls exit after sending the HTML
+}
+
 // Callback endpoint returns a GIF, not JSON — handle before the JSON router
 if ($path === '/pi-callback' && ($method === 'GET' || $method === 'POST')) {
     $ctrl = new PiCallbackController();

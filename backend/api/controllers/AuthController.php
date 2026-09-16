@@ -35,8 +35,13 @@ class AuthController {
             return ['success' => false, 'message' => 'Email already registered.'];
         }
 
-        $isAdmin = isset($data['is_admin']) ? $data['is_admin'] : 0;
-        $role = $isAdmin ? 'admin' : 'user';
+        if (isset($data['role'])) {
+            $role = $data['role'];
+            $isAdmin = ($role === 'admin') ? 1 : 0;
+        } else {
+            $isAdmin = isset($data['is_admin']) ? $data['is_admin'] : 0;
+            $role = $isAdmin ? 'admin' : 'user';
+        }
         $userId = $this->user->create($data['name'], $data['email'], $data['password'], $isAdmin, $role);
         $token = JWT::encode(['user_id' => $userId, 'email' => $data['email'], 'is_admin' => (bool)$isAdmin, 'role' => $role]);
 
@@ -155,14 +160,30 @@ class AuthController {
 
         $this->user->updateName($targetUserId, $name);
 
+        if (isset($data['role'])) {
+            $this->user->updateRole($targetUserId, $data['role']);
+        }
+
         $user = $this->user->findById($targetUserId);
         $user['totp_enabled'] = !empty($user['totp_enabled']) && $user['totp_enabled'] == 1;
 
-        return [
+        $response = [
             'success' => true,
             'message' => 'Profile updated successfully.',
             'user' => $user
         ];
+
+        // Re-issue a token so a changed role takes effect immediately for the caller.
+        if (isset($data['role'])) {
+            $response['token'] = JWT::encode([
+                'user_id' => $targetUserId,
+                'email' => $user['email'],
+                'is_admin' => !empty($user['is_admin']),
+                'role' => $user['role'],
+            ]);
+        }
+
+        return $response;
     }
 
     /**

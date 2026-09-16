@@ -10,6 +10,70 @@ class SupportController {
         $this->tickets = new SupportTicket();
     }
 
+    /**
+     * Server-rendered, printable HTML view of a ticket thread, opened by
+     * support agents from the "Printable view" link.
+     */
+    public function render($ticketId) {
+        $ticket = $this->tickets->getById($ticketId);
+        header('Content-Type: text/html; charset=UTF-8');
+
+        if (!$ticket) {
+            http_response_code(404);
+            echo '<!DOCTYPE html><html><body style="background:#0A0A0B;color:#fff;font-family:sans-serif;padding:40px">Ticket not found.</body></html>';
+            exit;
+        }
+
+        $rows = '';
+        foreach ($ticket['messages'] as $m) {
+            $who = $m['sender_role'] === 'admin' ? 'Support Team' : $ticket['user_name'];
+            $rows .= '<div class="msg ' . $m['sender_role'] . '">'
+                   . '<div class="who">' . $who . ' &middot; ' . $m['created_at'] . '</div>'
+                   . '<div class="body">' . $m['message'] . '</div>'
+                   . '</div>';
+        }
+
+        $id = $ticket['id'];
+        $subject = $ticket['subject'];
+        $name = $ticket['user_name'];
+        $email = $ticket['user_email'];
+        $status = $ticket['status'];
+
+        echo <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticket #$id &middot; $subject</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0A0A0B; color: #FAFAFA; min-height: 100vh; }
+    .container { max-width: 720px; margin: 0 auto; padding: 40px 24px; }
+    h1 { font-size: 22px; font-weight: 700; }
+    h1 span { background: linear-gradient(135deg, #8B5CF6, #C084FC); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .subject { font-size: 18px; color: #E4E4E7; margin: 6px 0 2px; }
+    .meta { color: #71717A; font-size: 13px; margin-bottom: 24px; }
+    .thread { display: flex; flex-direction: column; gap: 12px; }
+    .msg { background: #18181B; border: 1px solid #27272A; border-radius: 12px; padding: 14px 16px; }
+    .msg.admin { background: #1a1730; border-color: #8B5CF640; }
+    .who { color: #71717A; font-size: 12px; margin-bottom: 4px; }
+    .body { color: #D4D4D8; font-size: 14px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Ticket <span>#$id</span></h1>
+    <p class="subject">$subject</p>
+    <p class="meta">From $name &lt;$email&gt; &middot; status: $status</p>
+    <div class="thread">$rows</div>
+  </div>
+</body>
+</html>
+HTML;
+        exit;
+    }
+
     // --- Customer-facing ---
 
     public function create($authUser) {
