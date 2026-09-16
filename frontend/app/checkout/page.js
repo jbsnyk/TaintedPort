@@ -99,6 +99,7 @@ export default function CheckoutPage() {
   // Stripe payment state
   const [clientSecret, setClientSecret] = useState('');
   const [cardUnavailable, setCardUnavailable] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('card'); // 'card' | 'cash'
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -118,6 +119,8 @@ export default function CheckoutPage() {
   const netSubtotal = Math.max(0, discountedSubtotal - appliedCredit);
   const vat = netSubtotal * 0.23;
   const grandTotal = netSubtotal + vat;
+  // When card payments aren't configured, only cash is offered.
+  const effectiveMethod = cardUnavailable ? 'cash' : paymentMethod;
 
   // (Re)create the PaymentIntent whenever the amount owed changes. The server
   // computes the amount itself; we only need the returned client_secret.
@@ -341,36 +344,59 @@ export default function CheckoutPage() {
                     Place Order
                   </Button>
                 </>
-              ) : cardUnavailable ? (
-                <>
-                  <div className="bg-dark-lighter border border-dark-border rounded-lg p-4 mb-5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full border-2 border-accent-purple flex items-center justify-center">
-                        <div className="w-2.5 h-2.5 rounded-full bg-accent-purple" />
-                      </div>
-                      <span className="text-white">Payment on Delivery (Cash)</span>
-                    </div>
-                  </div>
-                  <Button onClick={() => handlePlaceOrder(null)} loading={loading} className="w-full" size="lg">
-                    Place Order
-                  </Button>
-                </>
-              ) : clientSecret ? (
-                <Elements
-                  stripe={stripePromise}
-                  options={{ clientSecret, appearance: stripeAppearance }}
-                  key={clientSecret}
-                >
-                  <PaymentForm grandTotal={grandTotal} onPay={handlePlaceOrder} validate={validate} />
-                </Elements>
               ) : (
-                <div className="flex items-center gap-3 text-zinc-500 text-sm py-4">
-                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Initializing secure payment…
-                </div>
+                <>
+                  {/* Payment method selector */}
+                  <div className="space-y-2 mb-5">
+                    {!cardUnavailable && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('card')}
+                        className={`w-full flex items-center gap-3 p-4 rounded-lg border text-left transition-colors ${effectiveMethod === 'card' ? 'border-accent-purple bg-accent-purple/5' : 'border-dark-border bg-dark-lighter hover:border-accent-purple/40'}`}
+                      >
+                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${effectiveMethod === 'card' ? 'border-accent-purple' : 'border-zinc-600'}`}>
+                          {effectiveMethod === 'card' && <span className="w-2.5 h-2.5 rounded-full bg-accent-purple" />}
+                        </span>
+                        <span className="text-white">Credit / Debit Card</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('cash')}
+                      className={`w-full flex items-center gap-3 p-4 rounded-lg border text-left transition-colors ${effectiveMethod === 'cash' ? 'border-accent-purple bg-accent-purple/5' : 'border-dark-border bg-dark-lighter hover:border-accent-purple/40'}`}
+                    >
+                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${effectiveMethod === 'cash' ? 'border-accent-purple' : 'border-zinc-600'}`}>
+                        {effectiveMethod === 'cash' && <span className="w-2.5 h-2.5 rounded-full bg-accent-purple" />}
+                      </span>
+                      <span className="text-white">Pay on Delivery (Cash)</span>
+                    </button>
+                  </div>
+
+                  {/* Selected method */}
+                  {effectiveMethod === 'card' ? (
+                    clientSecret ? (
+                      <Elements
+                        stripe={stripePromise}
+                        options={{ clientSecret, appearance: stripeAppearance }}
+                        key={clientSecret}
+                      >
+                        <PaymentForm grandTotal={grandTotal} onPay={handlePlaceOrder} validate={validate} />
+                      </Elements>
+                    ) : (
+                      <div className="flex items-center gap-3 text-zinc-500 text-sm py-4">
+                        <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Initializing secure payment…
+                      </div>
+                    )
+                  ) : (
+                    <Button onClick={() => handlePlaceOrder(null)} loading={loading} className="w-full" size="lg">
+                      Place Order
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>
