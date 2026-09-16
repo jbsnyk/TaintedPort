@@ -108,6 +108,33 @@ export default function AboutPage() {
             </div>
             <p className="text-zinc-500 text-sm mt-4">Version {version}</p>
           </div>
+
+          <div className="bg-dark-card border border-dark-border rounded-xl p-6 sm:p-8">
+            <h2 className="text-xl font-semibold text-white mb-3">Changelog</h2>
+            <p className="text-zinc-400 leading-relaxed mb-6">
+              Notable functionality added across releases:
+            </p>
+            <div className="space-y-5">
+              {[
+                { v: '1.5', title: 'Online payments', desc: 'Credit-card checkout via Stripe, plus pay-on-delivery, with automatic order-status updates.' },
+                { v: '1.4', title: 'Gift cards & tracking', desc: 'Gift cards with store credit, and shareable order-tracking links.' },
+                { v: '1.3', title: 'Promotions & lists', desc: 'Discount codes, a referral program, and wishlists.' },
+                { v: '1.2', title: 'Team & support', desc: 'Roles (customer / support / admin) with team management, and a customer support ticketing system.' },
+                { v: '1.1', title: 'Store operations', desc: 'Admin back-office: stock & inventory management, wine management with image uploads, and a sales analytics dashboard.' },
+                { v: '1.0', title: 'Storefront', desc: 'Wine catalogue with search, filtering and sorting; ratings & reviews; shopping cart and checkout; customer accounts with two-factor authentication.' },
+              ].map((r) => (
+                <div key={r.v} className="flex gap-4">
+                  <span className="flex-shrink-0 h-fit px-2.5 py-1 bg-accent-purple/10 border border-accent-purple/20 rounded-full text-accent-purple-light text-xs font-mono font-medium">
+                    v{r.v}
+                  </span>
+                  <div>
+                    <h4 className="text-white font-medium">{r.title}</h4>
+                    <p className="text-zinc-500 text-sm mt-0.5 leading-relaxed">{r.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* CTA */}
