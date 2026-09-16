@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../config/giftcard.php';
+require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../models/User.php';
 
 class GiftCardController {
@@ -30,12 +31,36 @@ class GiftCardController {
         }
 
         $fields = GiftCard::decode($data['gift_card']);
-        if ($fields === null || !isset($fields['amount'])) {
+        if ($fields === null || !isset($fields['amount']) || empty($fields['id'])) {
             http_response_code(400);
             return ['success' => false, 'message' => 'Invalid gift card.'];
         }
 
         $amount = floatval($fields['amount']);
+
+        // A gift card is single-use. Claim its id first: the UNIQUE(card_id)
+        // constraint makes the INSERT the authoritative guard, so a card that
+        // has already been redeemed (or two concurrent redemptions of the same
+        // card) can't be credited twice.
+        $db = Database::getInstance();
+        $stmt = $db->prepare(
+            'INSERT INTO redeemed_gift_cards (card_id, user_id, amount, redeemed_at)
+             VALUES (:cid, :uid, :amt, :ts)'
+        );
+        $stmt->bindValue(':cid', (string)$fields['id'], SQLITE3_TEXT);
+        $stmt->bindValue(':uid', $authUser['user_id'], SQLITE3_INTEGER);
+        $stmt->bindValue(':amt', $amount, SQLITE3_FLOAT);
+        $stmt->bindValue(':ts', time(), SQLITE3_INTEGER);
+        try {
+            $claimed = $stmt->execute();
+        } catch (\Exception $e) {
+            $claimed = false; // UNIQUE(card_id) violation -> already redeemed
+        }
+        if ($claimed === false) {
+            http_response_code(409);
+            return ['success' => false, 'message' => 'This gift card has already been redeemed.'];
+        }
+
         $this->user->addCredit($authUser['user_id'], $amount);
 
         return [

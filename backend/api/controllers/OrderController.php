@@ -4,6 +4,7 @@ require_once __DIR__ . '/../models/Order.php';
 require_once __DIR__ . '/../models/Cart.php';
 require_once __DIR__ . '/../models/DiscountCode.php';
 require_once __DIR__ . '/../config/tracking.php';
+require_once __DIR__ . '/../config/stripe.php';
 
 class OrderController {
     private $order;
@@ -92,7 +93,35 @@ class OrderController {
             }
         }
 
-        $orderId = $this->order->create($authUser['user_id'], $addr, $notes, $discountPercent);
+        // Card payment is optional. When a payment_intent_id is supplied we
+        // must confirm the payment actually succeeded, belongs to this buyer,
+        // and covers the amount owed before fulfilling the order. Orders placed
+        // without one fall back to payment-on-delivery, as before.
+        $paymentIntentId = null;
+        if (!empty($data['payment_intent_id'])) {
+            if (!StripeClient::enabled()) {
+                http_response_code(503);
+                return ['success' => false, 'message' => 'Card payments are not configured.'];
+            }
+            $expected = $this->order->checkoutAmountCents($authUser['user_id'], $discountPercent);
+            $pi = StripeClient::retrievePaymentIntent($data['payment_intent_id']);
+            $p = $pi['data'];
+            $ok = $pi['status'] < 400
+                && isset($p['status']) && $p['status'] === 'succeeded'
+                && (string)(isset($p['metadata']['user_id']) ? $p['metadata']['user_id'] : '') === (string)$authUser['user_id']
+                && intval(isset($p['amount']) ? $p['amount'] : 0) >= $expected;
+            if (!$ok) {
+                http_response_code(402);
+                return ['success' => false, 'message' => 'Payment could not be verified.'];
+            }
+            if ($this->order->isPaymentIntentUsed($data['payment_intent_id'])) {
+                http_response_code(409);
+                return ['success' => false, 'message' => 'This payment has already been used for an order.'];
+            }
+            $paymentIntentId = $data['payment_intent_id'];
+        }
+
+        $orderId = $this->order->create($authUser['user_id'], $addr, $notes, $discountPercent, $paymentIntentId);
 
         if ($orderId === null) {
             http_response_code(400);

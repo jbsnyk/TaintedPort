@@ -75,6 +75,7 @@ CREATE TABLE orders (
     carrier TEXT DEFAULT NULL,
     shipped_at DATETIME DEFAULT NULL,
     delivered_at DATETIME DEFAULT NULL,
+    payment_intent_id TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -154,6 +155,15 @@ CREATE TABLE support_messages (
     message TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (ticket_id) REFERENCES support_tickets(id)
+);
+
+CREATE TABLE redeemed_gift_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id TEXT UNIQUE NOT NULL,
+    user_id INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    redeemed_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 ');
 

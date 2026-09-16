@@ -3,11 +3,76 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
-import { orderAPI, discountAPI } from '@/lib/api';
+import { orderAPI, discountAPI, paymentAPI } from '@/lib/api';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
+
+// Publishable keys are safe to ship to the browser; the .env value overrides
+// this fallback so the demo works out of the box.
+const STRIPE_PK =
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+  'pk_test_51UFzKeFjrKiRZbyXSpCq8zcBCi5ipwMX9pTVxFZdJ218xvv1YPypyyklo1vCd4hnECpsnot8fbXUN5V8gTvYoRzx008xoUNp7J';
+const stripePromise = loadStripe(STRIPE_PK);
+
+const stripeAppearance = {
+  theme: 'night',
+  variables: {
+    colorPrimary: '#a855f7',
+    colorBackground: '#18181b',
+    colorText: '#e4e4e7',
+    borderRadius: '8px',
+    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+  },
+};
+
+// Card form — lives inside <Elements> so it can use the Stripe hooks.
+function PaymentForm({ grandTotal, onPay, validate }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [paying, setPaying] = useState(false);
+  const [err, setErr] = useState('');
+
+  const pay = async () => {
+    setErr('');
+    if (!validate()) return;
+    if (!stripe || !elements) return;
+    setPaying(true);
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      confirmParams: { return_url: window.location.origin + '/checkout' },
+      redirect: 'if_required',
+    });
+    if (error) {
+      setErr(error.message || 'Payment failed. Please check your card details.');
+      setPaying(false);
+      return;
+    }
+    if (paymentIntent && paymentIntent.status === 'succeeded') {
+      const ok = await onPay(paymentIntent.id);
+      if (ok) return; // parent swaps to the success screen and unmounts us
+      setErr('Payment succeeded but the order could not be placed. Please contact support.');
+    } else {
+      setErr('Payment was not completed.');
+    }
+    setPaying(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <PaymentElement />
+      {err && (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">{err}</div>
+      )}
+      <Button onClick={pay} loading={paying} disabled={!stripe} className="w-full" size="lg">
+        Pay €{grandTotal.toFixed(2)}
+      </Button>
+    </div>
+  );
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -29,6 +94,10 @@ export default function CheckoutPage() {
   const [discountError, setDiscountError] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(null);
 
+  // Stripe payment state
+  const [clientSecret, setClientSecret] = useState('');
+  const [cardUnavailable, setCardUnavailable] = useState(false);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
@@ -41,15 +110,43 @@ export default function CheckoutPage() {
     }
   }, [user]);
 
-  if (authLoading) return null;
-  if (!user) return null;
-
+  const storeCredit = Number(user?.account_credit || 0);
   const discountedSubtotal = appliedDiscount ? Math.max(0, total - appliedDiscount.discount_amount) : total;
-  const storeCredit = Number(user.account_credit || 0);
   const appliedCredit = Math.min(storeCredit, discountedSubtotal);
   const netSubtotal = Math.max(0, discountedSubtotal - appliedCredit);
   const vat = netSubtotal * 0.23;
   const grandTotal = netSubtotal + vat;
+
+  // (Re)create the PaymentIntent whenever the amount owed changes. The server
+  // computes the amount itself; we only need the returned client_secret.
+  useEffect(() => {
+    if (!user || items.length === 0 || grandTotal <= 0) {
+      setClientSecret('');
+      setCardUnavailable(false);
+      return;
+    }
+    let cancelled = false;
+    setClientSecret('');
+    setCardUnavailable(false);
+    const body = appliedDiscount
+      ? { discount_code: appliedDiscount.code, discount_percent: appliedDiscount.discount_percent }
+      : {};
+    paymentAPI
+      .createIntent(body)
+      .then((res) => {
+        if (!cancelled) setClientSecret(res.data.client_secret);
+      })
+      .catch(() => {
+        if (!cancelled) setCardUnavailable(true); // Stripe not configured → pay on delivery
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, items.length, grandTotal, appliedDiscount]);
+
+  if (authLoading) return null;
+  if (!user) return null;
 
   const handleApplyDiscount = async () => {
     if (!discountCode.trim()) return;
@@ -83,10 +180,10 @@ export default function CheckoutPage() {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-
+  // Places the order. paymentIntentId is set for card payments; null for
+  // fully-credit-covered (free) or pay-on-delivery orders.
+  const handlePlaceOrder = async (paymentIntentId) => {
+    if (!validate()) return false;
     setLoading(true);
     try {
       const payload = {
@@ -103,11 +200,14 @@ export default function CheckoutPage() {
         payload.discount_code = appliedDiscount.code;
         payload.discount_percent = appliedDiscount.discount_percent;
       }
+      if (paymentIntentId) payload.payment_intent_id = paymentIntentId;
       const res = await orderAPI.create(payload);
       setSuccess(res.data.order_id);
       clearCart();
+      return true;
     } catch (err) {
       setErrors({ server: err.response?.data?.message || 'Failed to place order. Please try again.' });
+      return false;
     } finally {
       setLoading(false);
     }
@@ -123,9 +223,7 @@ export default function CheckoutPage() {
           <p className="text-zinc-400 mb-2">
             Your order <span className="text-accent-purple font-mono">#{success}</span> has been placed successfully.
           </p>
-          <p className="text-zinc-500 text-sm mb-8">
-            Payment will be collected on delivery. Thank you for your purchase!
-          </p>
+          <p className="text-zinc-500 text-sm mb-8">Thank you for your purchase!</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/account">
               <Button>View Orders</Button>
@@ -168,12 +266,12 @@ export default function CheckoutPage() {
         )}
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Shipping Form */}
-          <div className="lg:col-span-2">
+          {/* Shipping + Payment */}
+          <div className="lg:col-span-2 space-y-6">
             <div className="bg-dark-card border border-dark-border rounded-xl p-6">
               <h2 className="text-lg font-semibold text-white mb-6">Shipping Address</h2>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-5">
                 <Input
                   label="Full Name"
                   placeholder="Joe Silva"
@@ -225,22 +323,53 @@ export default function CheckoutPage() {
                     className="w-full px-4 py-2.5 bg-dark-lighter border border-dark-border rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-accent-purple focus:ring-1 focus:ring-accent-purple transition-colors resize-none"
                   />
                 </div>
+              </div>
+            </div>
 
-                {/* Payment Method */}
-                <div className="bg-dark-lighter border border-dark-border rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-zinc-300 mb-2">Payment Method</h3>
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full border-2 border-accent-purple flex items-center justify-center">
-                      <div className="w-2.5 h-2.5 rounded-full bg-accent-purple" />
+            {/* Payment */}
+            <div className="bg-dark-card border border-dark-border rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-white mb-6">Payment</h2>
+
+              {grandTotal <= 0 ? (
+                <>
+                  <p className="text-zinc-400 text-sm mb-5">
+                    Your store credit covers this order in full — no payment required.
+                  </p>
+                  <Button onClick={() => handlePlaceOrder(null)} loading={loading} className="w-full" size="lg">
+                    Place Order
+                  </Button>
+                </>
+              ) : cardUnavailable ? (
+                <>
+                  <div className="bg-dark-lighter border border-dark-border rounded-lg p-4 mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-5 h-5 rounded-full border-2 border-accent-purple flex items-center justify-center">
+                        <div className="w-2.5 h-2.5 rounded-full bg-accent-purple" />
+                      </div>
+                      <span className="text-white">Payment on Delivery (Cash)</span>
                     </div>
-                    <span className="text-white">Payment on Delivery (Cash)</span>
                   </div>
+                  <Button onClick={() => handlePlaceOrder(null)} loading={loading} className="w-full" size="lg">
+                    Place Order
+                  </Button>
+                </>
+              ) : clientSecret ? (
+                <Elements
+                  stripe={stripePromise}
+                  options={{ clientSecret, appearance: stripeAppearance }}
+                  key={clientSecret}
+                >
+                  <PaymentForm grandTotal={grandTotal} onPay={handlePlaceOrder} validate={validate} />
+                </Elements>
+              ) : (
+                <div className="flex items-center gap-3 text-zinc-500 text-sm py-4">
+                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Initializing secure payment…
                 </div>
-
-                <Button type="submit" loading={loading} className="w-full" size="lg">
-                  Place Order
-                </Button>
-              </form>
+              )}
             </div>
           </div>
 

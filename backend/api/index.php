@@ -33,6 +33,7 @@ require_once __DIR__ . '/controllers/DiscountController.php';
 require_once __DIR__ . '/controllers/WishlistController.php';
 require_once __DIR__ . '/controllers/SupportController.php';
 require_once __DIR__ . '/controllers/GiftCardController.php';
+require_once __DIR__ . '/controllers/PaymentController.php';
 
 // Parse the request URI
 $requestUri = $_SERVER['REQUEST_URI'];
@@ -297,6 +298,11 @@ try {
     elseif ($path === '/orders/track' && $method === 'GET') {
         $ctrl = new OrderController();
         $response = $ctrl->track();
+    }
+    elseif ($path === '/payments/create-intent' && $method === 'POST') {
+        $authUser = authenticateToken();
+        $ctrl = new PaymentController();
+        $response = $ctrl->createIntent($authUser);
     }
     elseif (preg_match('#^/orders/(\d+)/tracking-link$#', $path, $matches) && $method === 'GET') {
         $authUser = authenticateToken();

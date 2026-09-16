@@ -70,6 +70,11 @@ export const giftcardAPI = {
   redeem: (giftCard) => api.post('/giftcards/redeem', { gift_card: giftCard }),
 };
 
+// Payment API (Stripe)
+export const paymentAPI = {
+  createIntent: (data = {}) => api.post('/payments/create-intent', data),
+};
+
 // Admin API
 export const adminAPI = {
   getOrders: () => api.get('/admin/orders'),

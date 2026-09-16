@@ -11,7 +11,39 @@ class Order {
         $this->db = Database::getInstance();
     }
 
-    public function create($userId, $shippingData, $deliveryNotes = '', $discountPercent = 0) {
+    /**
+     * Read-only preview of what the buyer must pay by card, in cents: the cart
+     * subtotal after the same discount + store-credit logic create() applies,
+     * plus 23% VAT. Used to size the Stripe PaymentIntent and to verify it.
+     */
+    public function checkoutAmountCents($userId, $discountPercent = 0) {
+        $cart = new Cart();
+        $cartData = $cart->getItems($userId);
+        if (empty($cartData['items'])) {
+            return 0;
+        }
+        $total = $cartData['total'];
+        if ($discountPercent > 0) {
+            $total = $total * (1 - ($discountPercent / 100));
+            if ($total < 0) $total = 0;
+        }
+        $userModel = new User();
+        $credit = $userModel->getCredit($userId);
+        if ($credit > 0 && $total > 0) {
+            $total = round($total - min($credit, $total), 2);
+        }
+        $grand = round($total * 1.23, 2); // VAT-inclusive, mirrors the UI total
+        return (int) round($grand * 100);
+    }
+
+    /** True if some order already consumed this Stripe PaymentIntent. */
+    public function isPaymentIntentUsed($paymentIntentId) {
+        $stmt = $this->db->prepare('SELECT 1 FROM orders WHERE payment_intent_id = :pi LIMIT 1');
+        $stmt->bindValue(':pi', $paymentIntentId, SQLITE3_TEXT);
+        return (bool) $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    }
+
+    public function create($userId, $shippingData, $deliveryNotes = '', $discountPercent = 0, $paymentIntentId = null) {
         $cart = new Cart();
         $cartData = $cart->getItems($userId);
 
@@ -49,9 +81,9 @@ class Order {
         }
 
         $stmt = $this->db->prepare(
-            'INSERT INTO orders (user_id, total, shipping_name, shipping_street, shipping_city, 
-             shipping_postal_code, shipping_phone, delivery_notes) 
-             VALUES (:user_id, :total, :name, :street, :city, :postal, :phone, :notes)'
+            'INSERT INTO orders (user_id, total, shipping_name, shipping_street, shipping_city,
+             shipping_postal_code, shipping_phone, delivery_notes, payment_intent_id)
+             VALUES (:user_id, :total, :name, :street, :city, :postal, :phone, :notes, :pi)'
         );
         $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
         $stmt->bindValue(':total', $total, SQLITE3_FLOAT);
@@ -61,6 +93,7 @@ class Order {
         $stmt->bindValue(':postal', $shippingData['postal_code'], SQLITE3_TEXT);
         $stmt->bindValue(':phone', $shippingData['phone'], SQLITE3_TEXT);
         $stmt->bindValue(':notes', $deliveryNotes, SQLITE3_TEXT);
+        $stmt->bindValue(':pi', $paymentIntentId, $paymentIntentId === null ? SQLITE3_NULL : SQLITE3_TEXT);
         $stmt->execute();
 
         $orderId = $this->db->lastInsertRowID();
