@@ -67,10 +67,13 @@ export default function Navbar() {
                   Account
                 </Link>
                 {adminLinks.length > 0 && (
-                  <div className="relative" onMouseLeave={() => setAdminOpen(false)}>
+                  <div
+                    className="relative"
+                    onMouseEnter={() => setAdminOpen(true)}
+                    onMouseLeave={() => setAdminOpen(false)}
+                  >
                     <button
                       onClick={() => setAdminOpen(!adminOpen)}
-                      onMouseEnter={() => setAdminOpen(true)}
                       className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 transition-colors"
                     >
                       Admin
@@ -79,17 +82,23 @@ export default function Navbar() {
                       </svg>
                     </button>
                     {adminOpen && (
-                      <div className="absolute right-0 top-full mt-2 w-56 bg-dark-card border border-dark-border rounded-lg shadow-xl overflow-hidden py-1 z-50">
-                        {adminLinks.map((l) => (
-                          <Link
-                            key={l.href}
-                            href={l.href}
-                            onClick={() => setAdminOpen(false)}
-                            className="block px-4 py-2 text-sm text-zinc-300 hover:bg-dark-lighter hover:text-white transition-colors"
-                          >
-                            {l.label}
-                          </Link>
-                        ))}
+                      // top-full pt-2: the 8px spacing is hoverable padding (a
+                      // descendant of the wrapper), not an empty margin gap, so
+                      // the pointer can travel from the button to the menu
+                      // without ever leaving the wrapper and closing it.
+                      <div className="absolute right-0 top-full pt-2 w-56 z-50">
+                        <div className="bg-dark-card border border-dark-border rounded-lg shadow-xl overflow-hidden py-1">
+                          {adminLinks.map((l) => (
+                            <Link
+                              key={l.href}
+                              href={l.href}
+                              onClick={() => setAdminOpen(false)}
+                              className="block px-4 py-2 text-sm text-zinc-300 hover:bg-dark-lighter hover:text-white transition-colors"
+                            >
+                              {l.label}
+                            </Link>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
