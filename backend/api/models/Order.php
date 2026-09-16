@@ -43,6 +43,38 @@ class Order {
         return (bool) $stmt->execute()->fetchArray(SQLITE3_ASSOC);
     }
 
+    /** Set the status of every order tied to a PaymentIntent. Returns rows changed. */
+    public function updateStatusByPaymentIntent($paymentIntentId, $status) {
+        $stmt = $this->db->prepare('UPDATE orders SET status = :status WHERE payment_intent_id = :pi');
+        $stmt->bindValue(':status', $status, SQLITE3_TEXT);
+        $stmt->bindValue(':pi', $paymentIntentId, SQLITE3_TEXT);
+        $stmt->execute();
+        return $this->db->changes();
+    }
+
+    /**
+     * Advance a PaymentIntent's order to :status only from the given prior
+     * statuses (so a refund/dispute can't be clobbered by a late
+     * payment_intent.succeeded, and updates stay idempotent).
+     */
+    public function advanceStatusByPaymentIntent($paymentIntentId, $status, array $fromStatuses) {
+        $names = [];
+        foreach ($fromStatuses as $i => $s) {
+            $names[] = ':s' . $i;
+        }
+        $in = implode(',', $names);
+        $stmt = $this->db->prepare(
+            "UPDATE orders SET status = :status WHERE payment_intent_id = :pi AND status IN ($in)"
+        );
+        $stmt->bindValue(':status', $status, SQLITE3_TEXT);
+        $stmt->bindValue(':pi', $paymentIntentId, SQLITE3_TEXT);
+        foreach ($fromStatuses as $i => $s) {
+            $stmt->bindValue(':s' . $i, $s, SQLITE3_TEXT);
+        }
+        $stmt->execute();
+        return $this->db->changes();
+    }
+
     public function create($userId, $shippingData, $deliveryNotes = '', $discountPercent = 0, $paymentIntentId = null) {
         $cart = new Cart();
         $cartData = $cart->getItems($userId);
