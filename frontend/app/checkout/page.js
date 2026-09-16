@@ -45,8 +45,11 @@ export default function CheckoutPage() {
   if (!user) return null;
 
   const discountedSubtotal = appliedDiscount ? Math.max(0, total - appliedDiscount.discount_amount) : total;
-  const vat = discountedSubtotal * 0.23;
-  const grandTotal = discountedSubtotal + vat;
+  const storeCredit = Number(user.account_credit || 0);
+  const appliedCredit = Math.min(storeCredit, discountedSubtotal);
+  const netSubtotal = Math.max(0, discountedSubtotal - appliedCredit);
+  const vat = netSubtotal * 0.23;
+  const grandTotal = netSubtotal + vat;
 
   const handleApplyDiscount = async () => {
     if (!discountCode.trim()) return;
@@ -301,6 +304,12 @@ export default function CheckoutPage() {
                   <div className="flex justify-between text-green-400 text-sm">
                     <span>Discount</span>
                     <span>-€{appliedDiscount.discount_amount.toFixed(2)}</span>
+                  </div>
+                )}
+                {appliedCredit > 0 && (
+                  <div className="flex justify-between text-accent-cyan text-sm">
+                    <span>Store credit</span>
+                    <span>-€{appliedCredit.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-zinc-400 text-sm">

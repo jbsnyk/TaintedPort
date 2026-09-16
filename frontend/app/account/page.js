@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { orderAPI, authAPI } from '@/lib/api';
+import { orderAPI, authAPI, giftcardAPI } from '@/lib/api';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import QRCode from 'qrcode';
@@ -53,6 +53,14 @@ export default function AccountPage() {
   const [disablePassword, setDisablePassword] = useState('');
   const [disabling2fa, setDisabling2fa] = useState(false);
   const [disable2faError, setDisable2faError] = useState('');
+
+  // Gift card / store credit state
+  const [welcomeCard, setWelcomeCard] = useState('');
+  const [claimingWelcome, setClaimingWelcome] = useState(false);
+  const [giftCardInput, setGiftCardInput] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [giftError, setGiftError] = useState('');
+  const [giftSuccess, setGiftSuccess] = useState('');
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -273,6 +281,43 @@ export default function AccountPage() {
     }
   };
 
+  const copyToClipboard = (text) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+  };
+
+  const handleClaimWelcome = async () => {
+    setClaimingWelcome(true);
+    setGiftError('');
+    try {
+      const res = await giftcardAPI.welcome();
+      setWelcomeCard(res.data.gift_card);
+    } catch (err) {
+      setGiftError(err.response?.data?.message || 'Failed to claim welcome gift.');
+    } finally {
+      setClaimingWelcome(false);
+    }
+  };
+
+  const handleRedeem = async () => {
+    const code = giftCardInput.trim();
+    if (!code) { setGiftError('Paste a gift card code first.'); return; }
+    setRedeeming(true);
+    setGiftError('');
+    setGiftSuccess('');
+    try {
+      const res = await giftcardAPI.redeem(code);
+      setGiftSuccess(`€${Number(res.data.credited).toFixed(2)} added to your store credit.`);
+      setGiftCardInput('');
+      await refreshUser();
+    } catch (err) {
+      setGiftError(err.response?.data?.message || 'Could not redeem this gift card.');
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
   // Format secret in groups of 4 for readability
   const formatSecret = (s) => s ? s.match(/.{1,4}/g)?.join(' ') : '';
 
@@ -349,6 +394,75 @@ export default function AccountPage() {
             <Button variant="ghost" onClick={logout}>
               Logout
             </Button>
+          </div>
+        </div>
+
+        {/* Store Credit & Gift Cards */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold text-white mb-6">
+            Store Credit &amp; <span className="gradient-text">Gift Cards</span>
+          </h2>
+
+          <div className="bg-dark-card border border-dark-border rounded-xl p-6 space-y-6">
+            {/* Balance */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-accent-cyan/10 border border-accent-cyan/20 flex items-center justify-center text-xl">🎁</div>
+                <div>
+                  <p className="text-white font-medium">Store Credit Balance</p>
+                  <p className="text-zinc-500 text-sm">Applied automatically at checkout</p>
+                </div>
+              </div>
+              <p className="text-2xl font-bold gradient-text">€{Number(user.account_credit || 0).toFixed(2)}</p>
+            </div>
+
+            {/* Welcome gift */}
+            <div className="pt-6 border-t border-dark-border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Welcome Gift</p>
+                  <p className="text-zinc-500 text-sm">Claim your €5 welcome gift card.</p>
+                </div>
+                <Button variant="secondary" size="sm" onClick={handleClaimWelcome} loading={claimingWelcome}>
+                  Claim €5 Card
+                </Button>
+              </div>
+              {welcomeCard && (
+                <div className="mt-4 p-4 bg-dark-lighter border border-dark-border rounded-lg">
+                  <p className="text-zinc-400 text-xs uppercase tracking-wider mb-2">Your gift card code</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-accent-cyan text-sm break-all select-all font-mono">{welcomeCard}</code>
+                    <button
+                      onClick={() => copyToClipboard(welcomeCard)}
+                      className="px-3 py-1.5 text-xs bg-dark-card border border-dark-border rounded-lg text-zinc-300 hover:text-white transition-colors flex-shrink-0"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <p className="text-zinc-600 text-xs mt-2">Paste it into &ldquo;Redeem a Gift Card&rdquo; below to add €5 to your balance.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Redeem */}
+            <div className="pt-6 border-t border-dark-border">
+              <p className="text-white font-medium mb-1">Redeem a Gift Card</p>
+              <p className="text-zinc-500 text-sm mb-3">Paste a gift card code to add its value to your store credit.</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Gift card code"
+                  value={giftCardInput}
+                  onChange={(e) => { setGiftCardInput(e.target.value); setGiftError(''); setGiftSuccess(''); }}
+                  className="flex-1 px-3 py-2 bg-dark-lighter border border-dark-border rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-accent-purple transition-colors font-mono"
+                />
+                <Button variant="primary" size="sm" onClick={handleRedeem} loading={redeeming} disabled={!giftCardInput.trim()}>
+                  Redeem
+                </Button>
+              </div>
+              {giftError && <p className="text-red-400 text-sm mt-2">{giftError}</p>}
+              {giftSuccess && <p className="text-green-400 text-sm mt-2">{giftSuccess}</p>}
+            </div>
           </div>
         </div>
 

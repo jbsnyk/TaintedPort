@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { orderAPI } from '@/lib/api';
+import Button from '@/components/Button';
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -13,6 +14,29 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Shareable tracking link
+  const [trackingLink, setTrackingLink] = useState('');
+  const [loadingLink, setLoadingLink] = useState(false);
+  const [linkError, setLinkError] = useState('');
+
+  const copyToClipboard = (text) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+  };
+
+  const handleGetTrackingLink = async () => {
+    setLoadingLink(true);
+    setLinkError('');
+    try {
+      const res = await orderAPI.getTrackingLink(order.id);
+      const path = res.data.tracking_url;
+      setTrackingLink(typeof window !== 'undefined' ? window.location.origin + path : path);
+    } catch (err) {
+      setLinkError(err.response?.data?.message || 'Could not generate a tracking link.');
+    } finally {
+      setLoadingLink(false);
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -127,6 +151,39 @@ export default function OrderDetailPage() {
                   )}
                 </div>
               ))}
+            </div>
+
+            {/* Shareable tracking link */}
+            <div className="mt-6 pt-6 border-t border-dark-border">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-white font-medium text-sm">Shareable tracking link</p>
+                  <p className="text-zinc-500 text-xs">Anyone with this link can view this order&apos;s status — no login required.</p>
+                </div>
+                <Button variant="secondary" size="sm" onClick={handleGetTrackingLink} loading={loadingLink}>
+                  {trackingLink ? 'Regenerate' : 'Get Link'}
+                </Button>
+              </div>
+              {linkError && <p className="text-red-400 text-xs mt-2">{linkError}</p>}
+              {trackingLink && (
+                <div className="mt-3 flex items-center gap-2">
+                  <code className="flex-1 text-accent-cyan text-xs break-all select-all font-mono bg-dark-lighter border border-dark-border rounded-lg px-3 py-2">{trackingLink}</code>
+                  <button
+                    onClick={() => copyToClipboard(trackingLink)}
+                    className="px-3 py-2 text-xs bg-dark-lighter border border-dark-border rounded-lg text-zinc-300 hover:text-white transition-colors flex-shrink-0"
+                  >
+                    Copy
+                  </button>
+                  <a
+                    href={trackingLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-2 text-xs bg-dark-lighter border border-dark-border rounded-lg text-zinc-300 hover:text-white transition-colors flex-shrink-0"
+                  >
+                    Open ↗
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         )}

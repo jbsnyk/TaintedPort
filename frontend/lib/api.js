@@ -60,6 +60,14 @@ export const orderAPI = {
   create: (data) => api.post('/orders', data),
   getAll: () => api.get('/orders'),
   getById: (id) => api.get(`/orders/${id}`),
+  getTrackingLink: (id) => api.get(`/orders/${id}/tracking-link`),
+  track: (d, sig) => api.get('/orders/track', { params: { d, sig } }),
+};
+
+// Gift card API
+export const giftcardAPI = {
+  welcome: () => api.get('/giftcards/welcome'),
+  redeem: (giftCard) => api.post('/giftcards/redeem', { gift_card: giftCard }),
 };
 
 // Admin API
