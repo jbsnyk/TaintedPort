@@ -59,16 +59,13 @@ RUN apk add --no-cache \
 RUN docker-php-ext-install pdo pdo_sqlite
 
 # ---------- PHP backend ----------
+# NOTE: backend/.env is .dockerignore'd, so no Stripe secret is ever baked into
+# this (public) image. Supply STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET at run
+# time (docker run -e ... or --env-file backend/.env); php-fpm forwards them to
+# workers via env[] and open_basedir keeps the LFI/SSRF away from them. Without
+# them the app runs fine and checkout falls back to payment-on-delivery.
 COPY backend/ /var/www/backend/
 COPY openapi.yaml /var/www/backend/openapi.yaml
-
-# Move runtime secrets out of the web root so the intentional LFI/SSRF (#27),
-# jailed to /var/www by open_basedir, can't read them. The entrypoint sources
-# this at start; it survives container restarts (unlike deleting it at runtime).
-# Absent on plain/stub builds -> the app just runs without card payments.
-RUN if [ -f /var/www/backend/.env ]; then \
-        mv /var/www/backend/.env /etc/taintedport.env && chmod 400 /etc/taintedport.env; \
-    fi
 
 # Owned by nginx (not www-data/php-fpm), and locked down to that owner only.
 # nginx gates this file behind basic auth at /a/vulns/data (see

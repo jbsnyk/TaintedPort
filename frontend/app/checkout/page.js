@@ -16,7 +16,9 @@ import Button from '@/components/Button';
 const STRIPE_PK =
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
   'pk_test_51UFzKeFjrKiRZbyXSpCq8zcBCi5ipwMX9pTVxFZdJ218xvv1YPypyyklo1vCd4hnECpsnot8fbXUN5V8gTvYoRzx008xoUNp7J';
-const stripePromise = loadStripe(STRIPE_PK);
+// developerTools.assistant: 'never' suppresses Stripe.js's floating dev-tools
+// widget that otherwise appears in test/sandbox mode.
+const stripePromise = loadStripe(STRIPE_PK, { developerTools: { assistant: { enabled: false } } });
 
 const stripeAppearance = {
   theme: 'night',
