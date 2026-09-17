@@ -15,6 +15,20 @@ class GiftCardController {
      * Hand the caller their EUR 5 welcome gift card token.
      */
     public function welcome($authUser) {
+        // One welcome gift per account. The conditional UPDATE flips the flag
+        // atomically, so it also settles two simultaneous claims (only one wins).
+        $db = Database::getInstance();
+        $stmt = $db->prepare(
+            'UPDATE users SET welcome_gift_claimed = 1
+             WHERE id = :id AND welcome_gift_claimed = 0'
+        );
+        $stmt->bindValue(':id', $authUser['user_id'], SQLITE3_INTEGER);
+        $stmt->execute();
+        if ($db->changes() === 0) {
+            http_response_code(409);
+            return ['success' => false, 'message' => 'You have already claimed your welcome gift.'];
+        }
+
         $token = GiftCard::issue(5.00, bin2hex(random_bytes(4)));
         return ['success' => true, 'gift_card' => $token, 'amount' => 5.00];
     }
