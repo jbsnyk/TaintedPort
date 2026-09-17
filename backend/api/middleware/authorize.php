@@ -1,9 +1,8 @@
 <?php
 
 /**
- * Mirrors AdminController::requireAdmin() on purpose: authorization reads
- * the role/is_admin claim straight from the decoded JWT payload, not the
- * database, so every controller in the app trusts the token the same way.
+ * Mirrors AdminController::requireAdmin() so both checks read the role/
+ * is_admin claim from the same decoded token consistently.
  */
 function requireAdmin($authUser) {
     if (empty($authUser['is_admin'])) {

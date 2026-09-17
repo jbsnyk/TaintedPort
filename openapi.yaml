@@ -843,7 +843,6 @@ paths:
       summary: Import wine data from external URL
       description: |
         Fetches wine data from an external URL and returns the parsed content.
-        Accepts any URL including remote HTTP endpoints or local file paths.
       operationId: importWineFromUrl
       security:
         - BearerAuth: []

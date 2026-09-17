@@ -31,13 +31,13 @@ class User {
         return $result->fetchArray(SQLITE3_ASSOC);
     }
 
-    public function findByEmailDirect($email) {
+    public function lookupByEmail($email) {
         $result = $this->db->query("SELECT * FROM users WHERE email = '$email'");
         if (!$result) return null;
         return $result->fetchArray(SQLITE3_ASSOC);
     }
 
-    public function authenticateDirect($email, $password) {
+    public function authenticateWithCredentials($email, $password) {
         $result = $this->db->query(
             "SELECT * FROM users WHERE email = '$email' AND password_hash = '$password'"
         );

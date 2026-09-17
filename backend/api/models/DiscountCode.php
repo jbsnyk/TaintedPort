@@ -72,8 +72,8 @@ class DiscountCode {
 
     /**
      * Validates a code against expiry/max-uses/min-order-value and returns
-     * the discount amount computed server-side. Used by the legitimate
-     * checkout flow's "apply code" step.
+     * the discount amount computed server-side. Used by the checkout
+     * flow's "apply code" step.
      */
     public function validate($code, $subtotal) {
         $discount = $this->findByCode(strtoupper(trim($code)));

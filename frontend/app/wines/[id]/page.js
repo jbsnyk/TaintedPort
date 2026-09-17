@@ -70,7 +70,7 @@ export default function WineDetailPage() {
           setAvgRating(revRes.data.avg_rating || 0);
           setReviewCount(revRes.data.review_count || 0);
         } catch {
-          // Reviews may fail for injected IDs
+          // Reviews are a non-critical enhancement; don't block the page if they can't load
         }
 
         // Fetch related wines (same region or type)

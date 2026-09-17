@@ -42,9 +42,9 @@ class Cart {
             return false;
         }
 
-        // Client-supplied price is still trusted (the vuln), but it is scoped
-        // to THIS user's cart line via cart_items.custom_price instead of
-        // mutating the shared wines catalogue that every other shopper sees.
+        // A custom price is stored per user on the cart line itself
+        // (cart_items.custom_price) rather than on the shared wines
+        // catalogue, so it only ever affects this shopper's own cart.
         $cpType = $customPrice !== null ? SQLITE3_FLOAT : SQLITE3_NULL;
 
         // Upsert: insert or bump quantity; a provided custom_price overrides,

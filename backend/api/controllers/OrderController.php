@@ -133,9 +133,8 @@ class OrderController {
             return ['success' => false, 'message' => $orderId['message']];
         }
 
-        // Bookkeeping only: if the code used matches a real managed discount
-        // code, count the redemption. Doesn't gate anything above - the
-        // discount amount itself was already decided by $discountPercent.
+        // If the code used matches a real managed discount code, count
+        // the redemption against it for reporting purposes.
         if (!empty($data['discount_code'])) {
             $discountModel = new DiscountCode();
             $realCode = $discountModel->findByCode(strtoupper(trim($data['discount_code'])));

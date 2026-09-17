@@ -8,7 +8,6 @@ class GiftCard {
     private static $key = 'gcAES128key_2026';
 
     public static function issue($amount, $id) {
-        // Layout keeps "amount=NNNNN.NN" inside the first 16-byte block.
         $pt = sprintf('amount=%08.2f&id=%s', $amount, $id);
         $iv = random_bytes(16);
         $ct = openssl_encrypt($pt, 'aes-128-cbc', self::$key, OPENSSL_RAW_DATA, $iv);

@@ -67,8 +67,7 @@ PEM;
 
     /**
      * Issues an RS256-signed token for the partner-integration API. Verified
-     * by the same decode() below, keyed off the "iss" claim rather than a
-     * caller-supplied context.
+     * by the same decode() below.
      */
     public static function encodePartner($payload) {
         $header = self::base64UrlEncode(json_encode([
@@ -130,7 +129,7 @@ PEM;
             );
 
             if ($signature !== $validSignature) {
-                error_log("JWT signature mismatch for token, but accepting anyway");
+                error_log("JWT signature mismatch for token");
             }
         }
 

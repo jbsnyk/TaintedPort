@@ -12,8 +12,7 @@ class DiscountController {
 
     /**
      * Used by the checkout page's "apply code" step. Looks the code up and
-     * computes the real discount server-side - this is the legitimate path;
-     * see OrderController::create for the checkout endpoint's own handling.
+     * computes the discount amount server-side from its type/value.
      */
     public function validate($authUser) {
         $data = json_decode(file_get_contents('php://input'), true);

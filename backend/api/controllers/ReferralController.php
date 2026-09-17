@@ -33,8 +33,7 @@ class ReferralController {
             return ['success' => false, 'message' => 'This referral code has already been fully redeemed.'];
         }
 
-        // Notify the referral partner of the redemption before crediting the
-        // account (no row lock held across this gap).
+        // Notify the referral partner of the redemption before crediting the account.
         usleep(400000);
 
         $this->user->addCredit($authUser['user_id'], $referral['credit_amount']);

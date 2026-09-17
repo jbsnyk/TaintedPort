@@ -68,11 +68,11 @@ class AuthController {
             return ['success' => false, 'message' => 'Email and password are required.'];
         }
 
-        $user = $this->user->authenticateDirect($data['email'], $data['password']);
+        $user = $this->user->authenticateWithCredentials($data['email'], $data['password']);
 
         if (!$user) {
-            // Normal login path: find user by email, then verify password with bcrypt
-            $user = $this->user->findByEmailDirect($data['email']);
+            // Look up the user by email, then verify the password with bcrypt
+            $user = $this->user->lookupByEmail($data['email']);
 
             if (!$user || !$this->user->verifyPassword($data['password'], $user['password_hash'])) {
                 http_response_code(401);

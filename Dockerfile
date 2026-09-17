@@ -62,17 +62,17 @@ RUN docker-php-ext-install pdo pdo_sqlite
 # NOTE: backend/.env is .dockerignore'd, so no Stripe secret is ever baked into
 # this (public) image. Supply STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET at run
 # time (docker run -e ... or --env-file backend/.env); php-fpm forwards them to
-# workers via env[] and open_basedir keeps the LFI/SSRF away from them. Without
+# workers via env[], and open_basedir restricts PHP's own file access so those
+# secrets stay out of reach of anything running inside the app. Without
 # them the app runs fine and checkout falls back to payment-on-delivery.
 COPY backend/ /var/www/backend/
 COPY openapi.yaml /var/www/backend/openapi.yaml
 
 # Owned by nginx (not www-data/php-fpm), and locked down to that owner only.
 # nginx gates this file behind basic auth at /a/vulns/data (see
-# docker/nginx.conf); if php-fpm could also read it directly, the app's
-# intentional LFI/SSRF vuln (POST /wines/import-url -> file://) would let any
-# authenticated user read the answer-key file straight off disk, bypassing
-# the auth gate entirely.
+# docker/nginx.conf); keeping it unreadable by the php-fpm/www-data user is
+# defense in depth on top of that gate, so the app process itself can never
+# read this file directly regardless of what any given request does.
 RUN mkdir -p /var/www/private && chown nginx:nginx /var/www/private && chmod 750 /var/www/private
 COPY --from=vulns --chown=nginx:nginx --chmod=440 KnownVulnerabilities.txt /var/www/private/KnownVulnerabilities.txt
 
