@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { loadStripe } from '@stripe/stripe-js';
@@ -95,6 +95,7 @@ export default function CheckoutPage() {
   const [applyingDiscount, setApplyingDiscount] = useState(false);
   const [discountError, setDiscountError] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(null);
+  const shippingRef = useRef(null);
 
   // Stripe payment state
   const [clientSecret, setClientSecret] = useState('');
@@ -182,6 +183,12 @@ export default function CheckoutPage() {
     if (!form.postal_code.trim()) e.postal_code = 'Postal code is required';
     if (!form.phone.trim()) e.phone = 'Phone number is required';
     setErrors(e);
+    if (Object.keys(e).length > 0) {
+      // The payment button lives well below this section, so a failed
+      // validation otherwise looks like nothing happened at all — the red
+      // error text only appears off-screen above the fold.
+      shippingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     return Object.keys(e).length === 0;
   };
 
@@ -273,7 +280,7 @@ export default function CheckoutPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Shipping + Payment */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-dark-card border border-dark-border rounded-xl p-6">
+            <div ref={shippingRef} className="bg-dark-card border border-dark-border rounded-xl p-6 scroll-mt-24">
               <h2 className="text-lg font-semibold text-white mb-6">Shipping Address</h2>
 
               <div className="space-y-5">
@@ -348,6 +355,16 @@ export default function CheckoutPage() {
                 <>
                   {/* Payment method selector */}
                   <div className="space-y-2 mb-5">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('cash')}
+                      className={`w-full flex items-center gap-3 p-4 rounded-lg border text-left transition-colors ${effectiveMethod === 'cash' ? 'border-accent-purple bg-accent-purple/5' : 'border-dark-border bg-dark-lighter hover:border-accent-purple/40'}`}
+                    >
+                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${effectiveMethod === 'cash' ? 'border-accent-purple' : 'border-zinc-600'}`}>
+                        {effectiveMethod === 'cash' && <span className="w-2.5 h-2.5 rounded-full bg-accent-purple" />}
+                      </span>
+                      <span className="text-white">Pay on Delivery (Cash)</span>
+                    </button>
                     {!cardUnavailable && (
                       <button
                         type="button"
@@ -360,16 +377,6 @@ export default function CheckoutPage() {
                         <span className="text-white">Credit / Debit Card</span>
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('cash')}
-                      className={`w-full flex items-center gap-3 p-4 rounded-lg border text-left transition-colors ${effectiveMethod === 'cash' ? 'border-accent-purple bg-accent-purple/5' : 'border-dark-border bg-dark-lighter hover:border-accent-purple/40'}`}
-                    >
-                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${effectiveMethod === 'cash' ? 'border-accent-purple' : 'border-zinc-600'}`}>
-                        {effectiveMethod === 'cash' && <span className="w-2.5 h-2.5 rounded-full bg-accent-purple" />}
-                      </span>
-                      <span className="text-white">Pay on Delivery (Cash)</span>
-                    </button>
                   </div>
 
                   {/* Selected method */}
