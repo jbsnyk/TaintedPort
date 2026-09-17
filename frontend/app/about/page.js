@@ -116,12 +116,10 @@ export default function AboutPage() {
             </p>
             <div className="space-y-5">
               {[
-                { v: '1.5', title: 'Online payments', desc: 'Credit-card checkout via Stripe, plus pay-on-delivery, with automatic order-status updates.' },
-                { v: '1.4', title: 'Gift cards & tracking', desc: 'Gift cards with store credit, and shareable order-tracking links.' },
-                { v: '1.3', title: 'Promotions & lists', desc: 'Discount codes, a referral program, and wishlists.' },
-                { v: '1.2', title: 'Team & support', desc: 'Roles (customer / support / admin) with team management, and a customer support ticketing system.' },
-                { v: '1.1', title: 'Store operations', desc: 'Admin back-office: stock & inventory management, wine management with image uploads, and a sales analytics dashboard.' },
-                { v: '1.0', title: 'Storefront', desc: 'Wine catalogue with search, filtering and sorting; ratings & reviews; shopping cart and checkout; customer accounts with two-factor authentication.' },
+                { v: '1.31', title: 'Online payments', desc: 'Credit-card checkout via Stripe, plus pay-on-delivery, with automatic order-status updates.' },
+                { v: '1.26', title: 'Gift cards & tracking', desc: 'Gift cards with store credit, and shareable order-tracking links.' },
+                { v: '1.22', title: 'Store, team & promotions', desc: 'Admin back-office (stock & inventory, wine management with image uploads, sales analytics), roles with team management and support ticketing, and promotions (discount codes, a referral program, and wishlists).' },
+                { v: '1.1', title: 'Storefront', desc: 'Wine catalogue with search, filtering and sorting; ratings & reviews; shopping cart and checkout; customer accounts with two-factor authentication.' },
               ].map((r) => (
                 <div key={r.v} className="flex gap-4">
                   <span className="flex-shrink-0 h-fit px-2.5 py-1 bg-accent-purple/10 border border-accent-purple/20 rounded-full text-accent-purple-light text-xs font-mono font-medium">
